@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>Signal Catch — 면접 분석</title>
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  body { font-family: 'Pretendard Variable', system-ui, sans-serif; }
+  .bar-fill { transition: width 0.7s ease; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: white; }
+  }
+</style>
+<script src="/static/admin_chrome.js?v=board" defer></script>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<header class="bg-white border-b border-slate-200 sticky top-0 z-10 no-print">
+  <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+      <h1 class="text-lg font-bold tracking-tight">Signal Catch
+        <span class="text-slate-400 font-normal text-sm">면접 분석</span>
+      </h1>
+    </a>
+    <nav class="flex items-center gap-5 text-sm">
+      <a href="/" class="text-slate-600 hover:text-slate-900">새 면접</a>
+      <a href="/history" class="text-slate-600 hover:text-slate-900">면접 기록</a>
+      <a href="/board" class="text-slate-600 hover:text-slate-900">공유 게시판</a>
+      <button id="printBtn" class="text-slate-500 hover:text-slate-900">인쇄</button>
+      <button id="logoutBtn" class="text-slate-500 hover:text-rose-600 transition">로그아웃</button>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10 space-y-6">
+
+  <div id="loading" class="text-center py-20 text-slate-400 text-sm">불러오는 중...</div>
+  <div id="errorBox" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-5 text-sm text-rose-700"></div>
+
+  <div id="content" class="hidden space-y-6">
+
+    <!-- 헤더 -->
+    <div class="flex items-end justify-between gap-4 no-print">
+      <div class="min-w-0">
+        <a id="backLink" href="/history" class="text-xs text-slate-500 hover:text-slate-700">← 면접 상세로</a>
+        <div class="flex items-baseline gap-2 mt-1">
+          <h2 id="sessionTitle" class="text-2xl font-bold truncate">면접</h2>
+          <sup id="codeBadge" class="text-xs text-slate-400 font-mono"></sup>
+        </div>
+        <p id="dateInfo" class="text-sm text-slate-500 mt-1"></p>
+        <p id="modelInfo" class="hidden text-xs text-slate-500 mt-0.5">사용 모델 <span id="modelInfoVal" class="font-mono text-slate-700"></span></p>
+      </div>
+    </div>
+
+    <!-- 인쇄용 헤더 (인쇄할 때만 보임) -->
+    <div class="hidden print:block mb-4">
+      <h1 id="printTitle" class="text-2xl font-bold"></h1>
+      <p id="printSubtitle" class="text-sm text-slate-500"></p>
+    </div>
+
+    <!-- 큰 점수 카드 -->
+    <section class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white">
+      <p class="text-xs font-semibold opacity-80 mb-3">종합 점수</p>
+      <div class="flex items-baseline gap-2 mb-6">
+        <span id="finalScore" class="text-6xl font-black">0</span>
+        <span id="finalMax" class="text-xl opacity-80">/ 100</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+        <div>
+          <div class="flex justify-between mb-1"><span>답변</span><span id="contentScore" class="font-semibold">0 / 80</span></div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="contentBar" class="bar-fill bg-white h-full" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="visualSection">
+          <div class="flex justify-between mb-1"><span>시각 비언어 (표정·시선·자세)</span><span id="visualScore" class="font-semibold">0 / 10</span></div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="visualBar" class="bar-fill bg-white h-full" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="voiceSection">
+          <div class="flex justify-between mb-1"><span>음성 비언어 (말 속도·침묵·전달)</span><span id="voiceScore" class="font-semibold">0 / 10</span></div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="voiceBar" class="bar-fill bg-white h-full" style="width:0%"></div>
+          </div>
+        </div>
+        <!-- 옛 JS 참조 호환용 hidden 더미 -->
+        <div id="nonverbalSection" class="hidden">
+          <span id="nonverbalScore"></span>
+          <div id="nonverbalBar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 항목별 평균 (공통 6항목) -->
+    <section class="bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-4">항목별 평균 <span class="text-xs font-normal text-slate-400">(공통 기준, 답변당 평균)</span></h3>
+      <div id="commonAverages" class="space-y-2.5"></div>
+    </section>
+
+    <!-- 질문별 점수 비교 -->
+    <section class="bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-4">질문별 점수 비교</h3>
+      <div id="questionScores" class="space-y-2"></div>
+    </section>
+
+    <!-- 강점·개선점 종합 -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-6">
+        <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          강점 종합
+        </h3>
+        <ul id="strengthsList" class="text-sm text-slate-700 space-y-2"></ul>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+        <h3 class="font-bold text-amber-800 mb-3 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z"/></svg>
+          개선 포인트 종합
+        </h3>
+        <ul id="improvementsList" class="text-sm text-slate-700 space-y-2"></ul>
+      </div>
+    </section>
+
+    <!-- 비언어 피드백 -->
+    <section id="nonverbalCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></section>
+
+    <!-- 비언어 측정 지표 추이 (시간축 차트 + 평가 기준 설명) -->
+    <section id="nonverbalDetails" class="hidden bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-3">시각 측정 지표 추이</h3>
+      <div id="nonverbalDetailsBody"></div>
+    </section>
+
+    <!-- 음성 비언어 카드 -->
+    <section id="voiceCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></section>
+
+    <!-- 답변 일관성 검증 카드 -->
+    <section id="consistencyCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></section>
+
+    <!-- 가장 약한 답변 (개선 우선순위) -->
+    <section class="bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-3">가장 점수가 낮았던 답변</h3>
+      <p class="text-xs text-slate-500 mb-3">우선 보완하면 큰 폭으로 개선될 영역입니다.</p>
+      <div id="weakestAnswer" class="text-sm"></div>
+    </section>
+
+    <!-- 인사이트 한 줄 -->
+    <section class="bg-slate-900 text-white rounded-2xl p-6">
+      <p class="text-xs uppercase tracking-wider opacity-60 mb-2">한 줄 요약</p>
+      <p id="insightLine" class="text-lg leading-relaxed"></p>
+    </section>
+
+    <!-- 심층 분석 (gpt-5.5) -->
+    <section id="deepSection" class="bg-white border border-slate-200 rounded-2xl p-6">
+      <div class="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <h3 class="font-bold">심층 분석</h3>
+          <p id="deepMeta" class="text-xs text-slate-500 mt-1">
+            가장 강력한 모델(gpt-5.5)로 답변 패턴·강약점·7일 액션 플랜까지 분석합니다.
+            일반 분석보다 1~2분 정도 더 걸려요.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 no-print shrink-0">
+          <button id="deepRunBtn" class="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-lg text-sm font-semibold">
+            심층 분석 시작
+          </button>
+          <button id="deepReRunBtn" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium">
+            다시 생성
+          </button>
+        </div>
+      </div>
+
+      <div id="deepLoading" class="hidden mt-4 flex items-center gap-3 text-sm text-slate-500">
+        <div class="w-5 h-5 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin"></div>
+        <span id="deepLoadingMsg">심층 분석을 생성하는 중... (1~2분 소요)</span>
+      </div>
+
+      <div id="deepError" class="hidden mt-4 bg-rose-50 border border-rose-200 rounded-lg p-4 text-sm text-rose-700"></div>
+
+      <div id="deepBody" class="hidden mt-4 prose prose-sm max-w-none text-slate-800 leading-relaxed"></div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { renderNonverbalDetails } from '/static/nonverbal_charts.js?v=20260515';
+import { renderVoiceCard, renderConsistencyCard } from '/static/nonverbal_extras.js?v=20260516';
+
+const $ = (id) => document.getElementById(id);
+const publicCode = decodeURIComponent(location.pathname.split('/').pop());
+
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fmtDate(s){if(!s)return'-';const d=new Date(s);return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
+
+// 꼬리질문 라벨 — Q1 / Q1-1 / Q1-2 / Q2 ...
+function computeQuestionLabels(questions) {
+  const labels = [];
+  let main = 0, fu = 0;
+  for (const q of (questions || [])) {
+    const id = String(q?.question_id_str || q?.question_id || '');
+    const isFu = id.startsWith('FU') || q?.is_followup === true;
+    if (isFu) {
+      fu += 1;
+      labels.push(main > 0 ? `Q${main}-${fu}` : `FU${fu}`);
+    } else {
+      main += 1; fu = 0;
+      labels.push(`Q${main}`);
+    }
+  }
+  return labels;
+}
+
+$('printBtn').addEventListener('click', () => window.print());
+$('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', {method:'POST'});
+  location.href = '/login';
+});
+
+// 공통 6항목 만점
+const COMMON_MAX = {
+  question_understanding: { label: '질문 의도 파악', max: 9 },
+  answer_structure:       { label: '답변 구조성',    max: 9 },
+  resume_job_relevance:   { label: '이력서 관련성',  max: 13 },
+  specificity:            { label: '경험 구체성',    max: 9 },
+  logic:                  { label: '논리·설득력',    max: 6 },
+  conciseness:            { label: '간결성',         max: 4 },
+};
+
+async function load() {
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(publicCode)}`);
+    if (res.status === 401) { location.href = '/login'; return; }
+    if (res.status === 403) throw new Error('접근 권한이 없습니다.');
+    if (res.status === 404) throw new Error('존재하지 않거나 삭제된 면접입니다.');
+    if (!res.ok) throw new Error('조회 실패');
+    const d = await res.json();
+    render(d);
+  } catch (e) {
+    $('loading').classList.add('hidden');
+    $('errorBox').textContent = e.message;
+    $('errorBox').classList.remove('hidden');
+  }
+}
+
+function render(d) {
+  $('loading').classList.add('hidden');
+  $('content').classList.remove('hidden');
+
+  // ───── 헤더 ─────
+  const title = (d.title && d.title.trim()) || '면접';
+  $('sessionTitle').textContent = title;
+  $('codeBadge').textContent = '#' + d.public_code;
+  $('dateInfo').textContent = fmtDate(d.completed_at || d.created_at);
+  if (d.model_used) {
+    $('modelInfoVal').textContent = d.model_used;
+    $('modelInfo').classList.remove('hidden');
+  }
+  $('backLink').href = `/session/${encodeURIComponent(d.public_code)}`;
+  $('printTitle').textContent = `${title}  #${d.public_code}`;
+  $('printSubtitle').textContent = fmtDate(d.completed_at || d.created_at);
+
+  // ───── 종합 점수 ─────
+  const hasVisual = !!(d.nonverbal_metrics && d.nonverbal_metrics.ok);
+  const hasVoice  = !!(d.voice_eval && d.voice_eval.ok);
+  const content = d.content_score_80 ?? 0;
+  const visual10 = hasVisual ? (Number(d.nonverbal_metrics.score_20 || 0) / 2) : 0;
+  const voice10 = hasVoice ? Number(d.voice_eval.voice_nonverbal_total || 0) : 0;
+  const anyNonverbal = hasVisual || hasVoice;
+
+  if (!anyNonverbal) {
+    $('finalScore').textContent = Number(content).toFixed(1);
+    $('finalMax').textContent = '/ 80';
+    $('visualSection').classList.add('hidden');
+    $('voiceSection').classList.add('hidden');
+  } else {
+    const total100 = d.final_score_100 != null ? d.final_score_100 : (content + visual10 + voice10);
+    $('finalScore').textContent = Number(total100).toFixed(1);
+    $('finalMax').textContent = '/ 100';
+    $('visualScore').textContent = hasVisual ? `${visual10.toFixed(1)} / 10` : '미수집 / 10';
+    $('visualBar').style.width = (visual10/10*100) + '%';
+    $('voiceScore').textContent = hasVoice ? `${voice10.toFixed(1)} / 10` : '미수집 / 10';
+    $('voiceBar').style.width = (voice10/10*100) + '%';
+  }
+  $('contentScore').textContent = `${Number(content).toFixed(1)} / 80`;
+  $('contentBar').style.width = (content / 80 * 100) + '%';
+
+  // ───── 공통 6항목 평균 ─────
+  const items = d.questions.filter(q => q.evaluation).map(q => q.evaluation);
+  const nItems = items.length;
+  const sums = {};
+  for (const k of Object.keys(COMMON_MAX)) sums[k] = 0;
+  items.forEach(ev => {
+    const cs = ev.common_scores || {};
+    for (const k of Object.keys(COMMON_MAX)) sums[k] += Number(cs[k] || 0);
+  });
+
+  const avgBox = $('commonAverages');
+  avgBox.innerHTML = '';
+  for (const [key, info] of Object.entries(COMMON_MAX)) {
+    const avg = nItems ? sums[key] / nItems : 0;
+    const pct = info.max > 0 ? (avg / info.max * 100) : 0;
+    const color = pct >= 80 ? 'bg-emerald-500'
+                : pct >= 60 ? 'bg-indigo-500'
+                : pct >= 40 ? 'bg-amber-500'
+                : 'bg-rose-500';
+    avgBox.insertAdjacentHTML('beforeend', `
+      <div>
+        <div class="flex justify-between text-sm mb-1">
+          <span>${info.label}</span>
+          <span class="text-slate-500">${avg.toFixed(1)} / ${info.max}</span>
+        </div>
+        <div class="bg-slate-100 rounded-full h-2">
+          <div class="bar-fill ${color} h-full rounded-full" style="width:${pct.toFixed(1)}%"></div>
+        </div>
+      </div>
+    `);
+  }
+
+  // ───── 질문별 점수 비교 ─────
+  const qBox = $('questionScores');
+  qBox.innerHTML = '';
+  const qLabels = computeQuestionLabels(d.questions);
+  d.questions.forEach((q, i) => {
+    const score = q.evaluation?.content_score ?? 0;
+    const pct = score / 80 * 100;
+    const color = score >= 64 ? 'bg-emerald-500'
+                : score >= 48 ? 'bg-indigo-500'
+                : score >= 32 ? 'bg-amber-500'
+                : 'bg-rose-500';
+    const label = qLabels[i];
+    const isFu  = String(q.question_id_str || '').startsWith('FU');
+    qBox.insertAdjacentHTML('beforeend', `
+      <div>
+        <div class="flex justify-between text-sm mb-1 gap-2">
+          <span class="flex-1 min-w-0 break-words whitespace-pre-line">
+            <span class="inline-block px-1.5 py-0.5 mr-1 rounded text-[10px] font-bold ${isFu ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}">${label}</span>${escapeHtml(q.text)}
+          </span>
+          <span class="text-slate-500 shrink-0">${score} / 80</span>
+        </div>
+        <div class="bg-slate-100 rounded-full h-2">
+          <div class="bar-fill ${color} h-full rounded-full" style="width:${pct.toFixed(1)}%"></div>
+        </div>
+      </div>
+    `);
+  });
+
+  // ───── 강점/개선점 종합 ─────
+  const allStrengths = [];
+  const allImprovements = [];
+  items.forEach(ev => {
+    (ev.strengths || []).forEach(s => allStrengths.push(s));
+    (ev.improvements || []).forEach(s => allImprovements.push(s));
+  });
+  // 중복은 그대로 두되, 너무 많으면 상위 6개만
+  const renderList = (id, arr, emptyMsg) => {
+    const el = $(id);
+    el.innerHTML = '';
+    if (!arr.length) { el.innerHTML = `<li class="text-slate-400">${emptyMsg}</li>`; return; }
+    arr.slice(0, 8).forEach(s => {
+      el.insertAdjacentHTML('beforeend', `<li class="flex gap-2"><span class="text-current opacity-60">•</span><span>${escapeHtml(s)}</span></li>`);
+    });
+  };
+  renderList('strengthsList', allStrengths, '추출된 강점이 없습니다.');
+  renderList('improvementsList', allImprovements, '추출된 개선점이 없습니다.');
+
+  // ───── 비언어 피드백 ─────
+  renderNonverbalFeedback(d);
+
+  // 음성 비언어 카드 + 답변 일관성 카드
+  renderVoiceCard($('voiceCard'), d.voice_eval, d.voice_per_question);
+  renderConsistencyCard($('consistencyCard'), d.consistency_checks, d.questions);
+
+  // ───── 가장 약한 답변 ─────
+  let weakest = null;
+  let weakestIdx = -1;
+  d.questions.forEach((q, idx) => {
+    if (!q.evaluation) return;
+    if (!weakest || q.evaluation.content_score < weakest.evaluation.content_score) {
+      weakest = q;
+      weakestIdx = idx;
+    }
+  });
+  if (weakest) {
+    const ev = weakest.evaluation;
+    const weakestLabel = qLabels[weakestIdx] || `Q${weakest.order_no}`;
+    $('weakestAnswer').innerHTML = `
+      <div class="mb-3">
+        <span class="inline-block px-2 py-0.5 bg-rose-100 text-rose-700 text-xs font-semibold rounded mb-2">${weakestLabel} · ${ev.content_score} / 80</span>
+        <p class="font-semibold leading-snug break-words whitespace-pre-line">${escapeHtml(weakest.text)}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3 mb-3">
+        <p class="text-xs text-slate-500 mb-1">내 답변</p>
+        <p class="leading-relaxed">${escapeHtml(weakest.transcript || '(답변 없음)')}</p>
+      </div>
+      ${ev.improvements?.length ? `
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+          <p class="text-xs font-semibold text-amber-700 mb-1.5">개선 방향</p>
+          <ul class="text-xs space-y-1">
+            ${ev.improvements.map(s => `<li>• ${escapeHtml(s)}</li>`).join('')}
+          </ul>
+        </div>` : ''}
+      ${ev.sample_answer ? `
+        <details class="bg-indigo-50 border border-indigo-200 rounded-lg">
+          <summary class="cursor-pointer p-3 text-xs font-semibold text-indigo-700">모범 답변 예시 보기</summary>
+          <p class="px-3 pb-3 text-xs leading-relaxed">${escapeHtml(ev.sample_answer)}</p>
+        </details>` : ''}
+    `;
+  } else {
+    $('weakestAnswer').innerHTML = '<p class="text-slate-400 text-xs">평가 데이터가 없습니다.</p>';
+  }
+
+  // ───── 한 줄 요약 ─────
+  renderInsight(d, content, nonverbal, items, sums, nItems);
+}
+
+function renderNonverbalFeedback(d) {
+  const card = $('nonverbalCard');
+  const fb = d.nonverbal_feedback;
+  const metrics = d.nonverbal_metrics;
+  const details = $('nonverbalDetails');
+  if (!fb || !metrics || !metrics.ok) {
+    card.classList.add('hidden');
+    if (details) details.classList.add('hidden');
+    return;
+  }
+  if (details) {
+    details.classList.remove('hidden');
+    renderNonverbalDetails($('nonverbalDetailsBody'), metrics);
+  }
+  const s = metrics.scores_20 || {};
+  // 3축 통합 — 옛 데이터(focus + blink 분리) 호환
+  const gazeScore = (s.gaze?.score != null)
+    ? s.gaze.score
+    : Number(((s.focus?.score ?? 0) + (s.blink?.score ?? 0)).toFixed(2));
+  const gazeLabel = s.gaze?.label
+    || [s.focus?.label, s.blink?.label].filter(Boolean).join(' · ');
+  const gazeFb = fb.gaze
+    || [fb.focus, fb.blink].filter(Boolean).join(' ');
+
+  card.classList.remove('hidden');
+  card.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold">비언어 분석</h3>
+      <span class="text-xs text-slate-400">${Number(metrics.score_20 ?? 0).toFixed(2)} / 20</span>
+    </div>
+    <p class="text-sm text-slate-700 leading-relaxed mb-4">${escapeHtml(fb.summary || '')}</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">표정 안정성 · ${s.smile?.score ?? '-'} / 6 — ${escapeHtml(s.smile?.label ?? '')}</p>
+        <p class="text-xs">${escapeHtml(fb.smile || '')}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">시선 안정성 · ${gazeScore ?? '-'} / 10 — ${escapeHtml(gazeLabel)}</p>
+        <p class="text-xs">${escapeHtml(gazeFb)}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">자세 안정성 · ${s.posture?.score ?? '-'} / 4 — ${escapeHtml(s.posture?.label ?? '')}</p>
+        <p class="text-xs">${escapeHtml(fb.posture || '')}</p>
+      </div>
+    </div>
+    ${fb.next_action ? `<p class="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-3 mt-4"><b>다음 면접 전:</b> ${escapeHtml(fb.next_action)}</p>` : ''}
+  `;
+}
+
+function renderInsight(d, content, nonverbal, items, sums, nItems) {
+  // 데이터 기반 자동 인사이트 문장 생성 (간단 규칙)
+  const grade = content >= 64 ? '우수'
+              : content >= 48 ? '양호'
+              : content >= 32 ? '보통'
+              : '개선 필요';
+
+  // 가장 강한 항목과 약한 항목 찾기 (점수율 기준)
+  let strongest = null, weakest = null;
+  for (const [key, info] of Object.entries(COMMON_MAX)) {
+    if (!nItems) break;
+    const avg = sums[key] / nItems;
+    const pct = info.max > 0 ? avg / info.max : 0;
+    if (!strongest || pct > strongest.pct) strongest = { key, label: info.label, pct };
+    if (!weakest || pct < weakest.pct) weakest = { key, label: info.label, pct };
+  }
+
+  let line = `이번 면접의 답변 품질은 <b>${grade}</b> 수준입니다`;
+  if (strongest && weakest) {
+    line += `. 특히 <b>${strongest.label}</b> 이 가장 안정적이었고, <b>${weakest.label}</b> 영역을 다음 면접에서 우선 보완하면 가장 큰 폭의 개선이 기대됩니다.`;
+  } else {
+    line += '.';
+  }
+  $('insightLine').innerHTML = line;
+}
+
+// ============================================================
+// 심층 분석 (gpt-5.5)
+// ============================================================
+const DEEP_TIMEOUT_MS = 180_000;  // 3분
+
+async function loadDeepAnalysis() {
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(publicCode)}/deep-analysis`, { credentials: 'same-origin' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.available) {
+      showDeepResult(data);
+    }
+  } catch (e) { /* 무시 — 없으면 그냥 안 보임 */ }
+}
+
+function showDeepResult(data) {
+  const md = data.markdown || '';
+  const html = (window.marked && marked.parse) ? marked.parse(md) : escapeHtml(md).replace(/\n/g, '<br>');
+  $('deepBody').innerHTML = html;
+  $('deepBody').classList.remove('hidden');
+  $('deepLoading').classList.add('hidden');
+  $('deepError').classList.add('hidden');
+  $('deepRunBtn').classList.add('hidden');
+  $('deepReRunBtn').classList.remove('hidden');
+  $('deepMeta').textContent =
+    `생성 모델: ${data.model || 'gpt-5.5'} · ${data.generated_at ? new Date(data.generated_at).toLocaleString('ko-KR') : ''}`;
+}
+
+async function runDeepAnalysis(force) {
+  $('deepError').classList.add('hidden');
+  $('deepLoading').classList.remove('hidden');
+  $('deepBody').classList.add('hidden');
+  $('deepRunBtn').disabled = true;
+  $('deepReRunBtn').disabled = true;
+  $('deepLoadingMsg').textContent = force ? '심층 분석을 다시 생성하는 중... (1~2분 소요)' : '심층 분석을 생성하는 중... (1~2분 소요)';
+
+  const controller = new AbortController();
+  const to = setTimeout(() => controller.abort(), DEEP_TIMEOUT_MS);
+
+  try {
+    const url = `/api/sessions/${encodeURIComponent(publicCode)}/deep-analysis` + (force ? '?force=true' : '');
+    const res = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      signal: controller.signal,
+    });
+    clearTimeout(to);
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      let detail = t;
+      try { detail = JSON.parse(t).detail || t; } catch {}
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    showDeepResult(data);
+  } catch (e) {
+    $('deepLoading').classList.add('hidden');
+    $('deepError').textContent = '심층 분석에 실패했어요: ' + (e.name === 'AbortError' ? '시간 초과' : e.message);
+    $('deepError').classList.remove('hidden');
+  } finally {
+    $('deepRunBtn').disabled = false;
+    $('deepReRunBtn').disabled = false;
+  }
+}
+
+$('deepRunBtn').addEventListener('click', () => runDeepAnalysis(false));
+$('deepReRunBtn').addEventListener('click', () => {
+  if (!confirm('심층 분석을 다시 생성할까요? 1~2분 정도 더 걸려요.')) return;
+  runDeepAnalysis(true);
+});
+
+load();
+loadDeepAnalysis();
+</script>
+
+</body>
+</html>

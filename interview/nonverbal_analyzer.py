@@ -22,26 +22,28 @@ import numpy as np
 class InterviewAnalyzer:
     """면접 비언어 행동 분석기.
 
-    배점(20점 만점, 직접 부여):
-      - 표정    6점  : 미소 유지 비율 20% 이상 시 만점 (비례 감점)
-      - 시선    6점  : 정면 응시 비율 90% 이상 시 만점 (비례 감점)
-      - 깜빡임  4점  : 분당 10~25회 유지 시 만점 (범위 이탈 시 비례 감점)
-      - 자세    4점  : 프레임당 평균 움직임 1.5px 이하 시 만점 (초과 시 감점)
+    배점(20점 만점, 3축 통합 체계):
+      - 표정 안정성  6점 : 미소 유지 비율 20% 이상 시 만점 (비례 감점)
+      - 시선 안정성 10점 : focus(응시) + blink(깜빡임) 통합
+                          · focus 6점 — 응시 비율 75% 이상 시 만점 (이전 90→75 완화)
+                          · blink 4점 — 분당 10~25회 유지 시 만점
+      - 자세 안정성  4점 : 프레임당 평균 움직임 1.5px 이하 시 만점
 
-    텍스트 피드백 라벨 (점수와 별개로 정성적 코멘트용):
-      - 시선: focus_ratio >= 80% → "집중도 매우 높음"
+    내부적으로는 focus/blink 를 분리해 계산하되, 외부 노출용 scores_20 에는
+    `smile / gaze / posture` 3축으로 통합한 결과만 제공.
     """
 
-    # 항목별 만점
+    # 항목별 만점 (분해 컴포넌트)
     SMILE_MAX = 6.0
-    FOCUS_MAX = 6.0
-    BLINK_MAX = 4.0
+    FOCUS_MAX = 6.0      # 시선 안정성의 'focus' 컴포넌트
+    BLINK_MAX = 4.0      # 시선 안정성의 'blink' 컴포넌트
+    GAZE_MAX  = 10.0     # 시선 안정성 통합 (focus + blink)
     POSTURE_MAX = 4.0
     TOTAL_MAX = 20.0
 
-    # 만점 기준선
+    # 만점 기준선 — 시선 완화 (이전 90% → 75%)
     SMILE_FULL_RATIO = 20.0   # 미소 유지 비율(%)
-    FOCUS_FULL_RATIO = 90.0   # 정면 응시 비율(%)
+    FOCUS_FULL_RATIO = 75.0   # 정면 응시 비율(%) — 완화
     BLINK_LOW = 10.0          # 분당 깜빡임 정상 하한
     BLINK_HIGH = 25.0         # 정상 상한
     BLINK_CENTER = 17.5       # 정상 범위 중앙
@@ -241,17 +243,16 @@ class InterviewAnalyzer:
     @staticmethod
     def _smile_label(smile_ratio: float) -> str:
         if smile_ratio >= 20:
-            return "긍정적 표정 충분"
+            return "안정"
         if smile_ratio >= 10:
-            return "표정 다소 부족"
+            return "약간 부족"
         return "표정 거의 없음"
 
     @staticmethod
     def _focus_label(focus_ratio: float) -> str:
-        # 사양: 시선 고정률 80% 이상 시 '집중도 매우 높음'
-        if focus_ratio >= 80:
-            return "집중도 매우 높음"
-        if focus_ratio >= 60:
+        if focus_ratio >= 70:
+            return "응시 안정"
+        if focus_ratio >= 50:
             return "양호"
         return "시선 이탈 잦음"
 
@@ -263,10 +264,23 @@ class InterviewAnalyzer:
             return "긴장도 높음(과다 깜빡임)"
         return "응시 과다(깜빡임 적음)"
 
+    @classmethod
+    def _gaze_label(cls, focus_ratio: float, bpm: float) -> str:
+        focus_ok = focus_ratio >= 70
+        blink_ok = cls.BLINK_LOW <= bpm <= cls.BLINK_HIGH
+        if focus_ok and blink_ok:
+            return "시선 안정"
+        if focus_ok:
+            return "응시는 양호하나 깜빡임 다소 많음" if bpm > cls.BLINK_HIGH \
+                else "응시는 양호하나 깜빡임 적음"
+        if blink_ok:
+            return "깜빡임은 안정적이나 시선 이탈 다소 있음"
+        return "시선 이탈·깜빡임 불안정"
+
     @staticmethod
     def _posture_label(avg_mv: float) -> str:
         if avg_mv <= 1.5:
-            return "안정적"
+            return "안정"
         if avg_mv <= 3.0:
             return "약간 흔들림"
         return "산만함"
@@ -290,24 +304,27 @@ class InterviewAnalyzer:
         bpm = (self.blink_count / (duration / 60)) if duration > 0 else 0
         avg_mv = self.total_movement / self.total_frames
 
-        # 1) 표정 6점: 20% 이상이면 만점, 비례 감점
+        # 1) 표정 안정성 6점: 20% 이상이면 만점, 비례 감점
         smile_score = min(self.SMILE_MAX,
                           (smile_ratio / self.SMILE_FULL_RATIO) * self.SMILE_MAX)
 
-        # 2) 시선 6점: 90% 이상이면 만점, 비례 감점
+        # 2-a) 시선 응시 (분해 컴포넌트) 6점: FOCUS_FULL_RATIO(75%) 이상 만점
         focus_score = min(self.FOCUS_MAX,
                           (focus_ratio / self.FOCUS_FULL_RATIO) * self.FOCUS_MAX)
 
-        # 3) 깜빡임 4점: 10~25회/분 만점, 이탈 시 중앙(17.5)에서 거리 비례 감점
+        # 2-b) 깜빡임 (분해 컴포넌트) 4점: 10~25/min 만점
         if self.BLINK_LOW <= bpm <= self.BLINK_HIGH:
             blink_score = self.BLINK_MAX
         else:
             blink_score = max(0.0, self.BLINK_MAX - abs(bpm - self.BLINK_CENTER) * 0.1)
 
-        # 4) 자세 4점: 1.5px/f 이하 만점, 초과 시 픽셀당 2점 감점
+        # 2) 시선 안정성 10점 (통합) = focus + blink
+        gaze_score = min(self.GAZE_MAX, focus_score + blink_score)
+
+        # 3) 자세 안정성 4점: 1.5px/f 이하 만점, 초과 시 픽셀당 2점 감점
         posture_score = max(0.0, self.POSTURE_MAX - max(0.0, avg_mv - self.POSTURE_FULL_PX) * 2.0)
 
-        total_20 = smile_score + focus_score + blink_score + posture_score
+        total_20 = smile_score + gaze_score + posture_score
 
         return {
             "ok": True,
@@ -320,15 +337,19 @@ class InterviewAnalyzer:
                 "blink_per_minute": round(bpm, 2),
                 "avg_movement_px": round(avg_mv, 3),
             },
+            # 외부 노출 3축: 표정 안정성 / 시선 안정성 / 자세 안정성
             "scores_20": {
-                "smile":   {"score": round(smile_score, 2),  "max": self.SMILE_MAX,
+                "smile":   {"score": round(smile_score, 2),   "max": self.SMILE_MAX,
                             "label": self._smile_label(smile_ratio)},
-                "focus":   {"score": round(focus_score, 2),  "max": self.FOCUS_MAX,
-                            "label": self._focus_label(focus_ratio)},
-                "blink":   {"score": round(blink_score, 2),  "max": self.BLINK_MAX,
-                            "label": self._blink_label(bpm)},
+                "gaze":    {"score": round(gaze_score, 2),    "max": self.GAZE_MAX,
+                            "label": self._gaze_label(focus_ratio, bpm)},
                 "posture": {"score": round(posture_score, 2), "max": self.POSTURE_MAX,
                             "label": self._posture_label(avg_mv)},
+                # (내부 디버깅용) 분해 컴포넌트
+                "_focus_component": {"score": round(focus_score, 2), "max": self.FOCUS_MAX,
+                                     "label": self._focus_label(focus_ratio)},
+                "_blink_component": {"score": round(blink_score, 2), "max": self.BLINK_MAX,
+                                     "label": self._blink_label(bpm)},
             },
             "score_20": round(total_20, 2),
         }
@@ -341,19 +362,17 @@ class InterviewAnalyzer:
         sc = m["metrics"]
         return (
             f"\n{'='*64}\n"
-            f"            [ AI 면접 비언어 종합 평가 (20점 만점) ]\n"
+            f"            [ AI 면접 비언어 종합 평가 (20점 만점, 3축 통합) ]\n"
             f"{'='*64}\n"
             f" ▶ 비언어 점수    :  {m['score_20']:>5.2f} / 20.00\n"
             f" ▶ 진행 시간      :  {m['duration_sec']:.1f}초  "
             f"(침묵 {m['silent_sec']:.1f}s / 발화 {m['speak_sec']:.1f}s)\n"
             f"{'-'*64}\n"
-            f" 1. 표정       {sc['smile_ratio']:>6.1f} %     "
+            f" 1. 표정 안정성  {sc['smile_ratio']:>6.1f} %     "
             f"{s['smile']['score']:>4.2f} / {s['smile']['max']:.0f}   [{s['smile']['label']}]\n"
-            f" 2. 시선       {sc['focus_ratio']:>6.1f} %     "
-            f"{s['focus']['score']:>4.2f} / {s['focus']['max']:.0f}   [{s['focus']['label']}]\n"
-            f" 3. 깜빡임     {sc['blink_per_minute']:>6.1f} 회/분 "
-            f"{s['blink']['score']:>4.2f} / {s['blink']['max']:.0f}   [{s['blink']['label']}]\n"
-            f" 4. 자세       {sc['avg_movement_px']:>6.2f} px/f  "
+            f" 2. 시선 안정성  응시 {sc['focus_ratio']:>5.1f}% / 깜빡임 {sc['blink_per_minute']:>4.1f}/min  "
+            f"{s['gaze']['score']:>4.2f} / {s['gaze']['max']:.0f}  [{s['gaze']['label']}]\n"
+            f" 3. 자세 안정성  {sc['avg_movement_px']:>6.2f} px/f  "
             f"{s['posture']['score']:>4.2f} / {s['posture']['max']:.0f}   [{s['posture']['label']}]\n"
             f"{'='*64}\n"
         )

@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>Signal Catch — AI 모의면접</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  body { font-family: 'Pretendard Variable', system-ui, sans-serif; }
+  .pulse-record { animation: pulse 1.4s infinite ease-in-out; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    50%      { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
+  }
+  .hidden-section { display: none; }
+  /* model-card / cam-card 라디오 선택 상태 — JS 로 toggle */
+  .card-selected { border-color: #6366f1 !important; background-color: rgb(238 242 255) !important; }
+  .card-default  { border-color: rgb(226 232 240) !important; background-color: white !important; }
+</style>
+<script src="/static/admin_chrome.js?v=board" defer></script>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+
+<!-- HEADER -->
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+      <h1 class="text-lg font-bold tracking-tight">Signal Catch
+        <span class="text-slate-400 font-normal text-sm">AI 모의면접</span>
+      </h1>
+    </div>
+    <div class="flex items-center gap-5">
+      <nav class="flex items-center gap-4 text-sm">
+        <a href="/" class="font-semibold text-indigo-600">새 면접</a>
+        <a href="/history" class="text-slate-600 hover:text-slate-900">면접 기록</a>
+        <a href="/board" class="text-slate-600 hover:text-slate-900">공유 게시판</a>
+      </nav>
+      <span id="recordingPill" class="hidden inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500 text-white text-xs font-semibold rounded-full">
+        <span class="w-1.5 h-1.5 bg-white rounded-full pulse-record"></span>
+        녹화 중
+      </span>
+      <span id="status" class="text-xs text-slate-500">준비됨</span>
+      <!-- 사용자 메뉴 -->
+      <div id="userMenu" class="hidden relative">
+        <button id="userBtn" class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-100 transition">
+          <span id="userInitial" class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">U</span>
+          <span id="userName" class="text-sm font-medium">사용자</span>
+          <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden z-20">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <p id="userEmail" class="text-xs text-slate-500 truncate">email@example.com</p>
+            <p id="userRole" class="text-[10px] text-indigo-600 font-semibold uppercase tracking-wider mt-1">user</p>
+          </div>
+          <button id="logoutBtn" class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 text-rose-600 transition">로그아웃</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10">
+
+  <!-- 진행 중이던 면접 재개 배너 (localStorage 와 서버 모두에 세션이 있을 때만) -->
+  <section id="resumeBanner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-4">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div class="min-w-0">
+        <p class="font-semibold text-amber-900">진행 중이던 면접이 남아있어요</p>
+        <p id="resumeProgressText" class="text-xs text-amber-700 mt-0.5">이어서 진행할 수 있습니다.</p>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button id="resumeBtn" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition">이어서 진행</button>
+        <button id="discardResumeBtn" class="px-3 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-700 rounded-lg text-sm font-medium transition">새로 시작</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= STEP 1: 이력서 입력 ============= -->
+  <section id="step-setup" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+    <h2 class="text-xl font-bold mb-2">1. 이력서 입력</h2>
+    <p class="text-sm text-slate-500 mb-6">텍스트로 직접 붙여넣거나 파일을 업로드하세요. (.txt / .docx / .pdf / .hwp / .hwpx)</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label class="text-sm font-semibold text-slate-700 mb-2 block">이력서 텍스트</label>
+        <textarea id="resumeText" rows="10"
+          class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+          placeholder="이름: 홍길동
+학력: OO대학교 전자공학과 졸업
+경력: ABC 스타트업 백엔드 인턴 6개월, Python/Django
+프로젝트: ..."></textarea>
+      </div>
+      <div>
+        <label class="text-sm font-semibold text-slate-700 mb-2 block">또는 파일 업로드</label>
+        <label class="flex items-center justify-center border-2 border-dashed border-slate-300 rounded-lg h-44 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition">
+          <input id="resumeFile" type="file" accept=".txt,.docx,.pdf,.hwp,.hwpx" class="hidden" />
+          <div class="text-center">
+            <svg class="w-10 h-10 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p id="filename" class="text-sm text-slate-600">클릭해서 파일 선택</p>
+            <p class="text-xs text-slate-400 mt-1">텍스트 입력보다 우선 적용됩니다</p>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- ===== 회사·직무 정보 (선택) ===== -->
+    <details class="mt-6 border border-slate-200 rounded-lg group">
+      <summary class="cursor-pointer p-3 text-sm font-semibold text-slate-700 flex items-center gap-2 list-none hover:bg-slate-50 rounded-lg">
+        <svg class="w-4 h-4 text-slate-400 transition group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        지원 회사·직무 정보 <span class="text-xs text-slate-400 font-normal">(선택)</span>
+        <span class="ml-auto relative group/help inline-flex items-center cursor-help" tabindex="0">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div class="hidden group-hover/help:block group-focus-within/help:block absolute right-0 top-6 z-30 w-80 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl normal-case font-normal text-left">
+            <p class="font-semibold mb-1.5">왜 입력하나요?</p>
+            <p class="leading-relaxed text-slate-200 mb-1.5">그 회사·직무에 맞춰 질문이 더 구체적으로 만들어집니다.</p>
+            <p class="leading-relaxed text-slate-200 mb-1.5"><b>회사명·직무명만 입력</b>해도 시스템이 자동으로 일반 정보를 찾아옵니다. 채용공고·직무기술서를 함께 붙여 주시면 훨씬 정확해집니다.</p>
+            <p class="text-slate-400">입력하지 않아도 면접은 진행됩니다.</p>
+          </div>
+        </span>
+      </summary>
+      <div class="p-4 pt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-medium text-slate-600 mb-1 block">회사명</label>
+          <input id="companyName" type="text" placeholder="예: 한전KDN"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-600 mb-1 block">직무명</label>
+          <input id="jobTitle" type="text" placeholder="예: 통신일반"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-medium text-slate-600 mb-1 block">채용공고 · 직무기술서 · 회사 설명 <span class="text-slate-400">(붙여넣기 — 선택)</span></label>
+          <textarea id="companyText" rows="5" placeholder="이 칸을 비워두면 회사명·직무명만으로 시스템이 일반 정보를 자동으로 찾아 옵니다. 더 정확한 질문을 원하면 공식 채용공고/직무기술서를 그대로 붙여넣어 주세요."
+                    class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"></textarea>
+          <p class="text-[11px] text-slate-400 mt-1">자동 리서치는 모델 학습 지식 기반이므로 시점·세부 정보가 부정확할 수 있어요. 민감 정보는 입력하지 마세요.</p>
+        </div>
+      </div>
+    </details>
+
+    <!-- ===== AI 모델 선택 ===== -->
+    <div class="mt-6">
+      <label class="block text-sm font-semibold text-slate-700 mb-2">AI 모델</label>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <label class="model-card cursor-pointer border-2 border-indigo-500 bg-indigo-50 rounded-lg p-3 transition">
+          <input type="radio" name="aiModel" value="gpt-4o-mini" class="hidden" checked />
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-semibold text-sm">GPT-4o mini</span>
+            <span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">기본</span>
+          </div>
+          <p class="text-[11px] text-slate-500">빠른 응답</p>
+        </label>
+        <label class="model-card cursor-pointer border-2 border-slate-200 bg-white rounded-lg p-3 hover:border-slate-300 transition">
+          <input type="radio" name="aiModel" value="gpt-4o" class="hidden" />
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-semibold text-sm">GPT-4o</span>
+          </div>
+          <p class="text-[11px] text-slate-500">균형있는 품질</p>
+        </label>
+        <label class="model-card cursor-pointer border-2 border-slate-200 bg-white rounded-lg p-3 hover:border-slate-300 transition">
+          <input type="radio" name="aiModel" value="gpt-5.4" class="hidden" />
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-semibold text-sm">GPT-5.4</span>
+          </div>
+          <p class="text-[11px] text-slate-500">깊이 있는 평가</p>
+        </label>
+      </div>
+    </div>
+
+    <!-- ===== 카메라 모드 선택 ===== -->
+    <div class="mt-5">
+      <label class="block text-sm font-semibold text-slate-700 mb-2">카메라</label>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <label class="cam-card cursor-pointer border-2 border-indigo-500 bg-indigo-50 rounded-lg p-3 transition">
+          <input type="radio" name="camMode" value="realtime" class="hidden" checked />
+          <div class="flex items-center gap-1.5 mb-1">
+            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <span class="font-semibold text-sm">실시간 표시</span>
+          </div>
+          <p class="text-[11px] text-slate-500">영상 보면서 면접</p>
+        </label>
+        <label class="cam-card cursor-pointer border-2 border-slate-200 bg-white rounded-lg p-3 hover:border-slate-300 transition">
+          <input type="radio" name="camMode" value="record" class="hidden" />
+          <div class="flex items-center gap-1.5 mb-1">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="9" stroke-width="2"/></svg>
+            <span class="font-semibold text-sm">녹화만</span>
+          </div>
+          <p class="text-[11px] text-slate-500">면접 후 다시 보기</p>
+        </label>
+        <label class="cam-card cursor-pointer border-2 border-slate-200 bg-white rounded-lg p-3 hover:border-slate-300 transition">
+          <input type="radio" name="camMode" value="off" class="hidden" />
+          <div class="flex items-center gap-1.5 mb-1">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18M9 5h6a2 2 0 012 2v4M5 9v6a2 2 0 002 2h6"/></svg>
+            <span class="font-semibold text-sm">사용 안함</span>
+          </div>
+          <p class="text-[11px] text-slate-500">답변만 평가</p>
+        </label>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 mt-6 flex-wrap">
+      <label class="text-sm text-slate-600">맞춤 질문
+        <input id="nPersonalized" type="number" value="2" min="0" max="15" class="w-14 ml-1 border border-slate-300 rounded px-2 py-1 text-sm" />
+      </label>
+      <label class="text-sm text-slate-600">공통 질문
+        <input id="nCommon" type="number" value="1" min="0" max="10" class="w-14 ml-1 border border-slate-300 rounded px-2 py-1 text-sm" />
+      </label>
+
+      <!-- 꼬리 질문 토글 + 도움말 팝업 -->
+      <div class="flex items-center gap-1.5 text-sm text-slate-700">
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input id="enableFollowups" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+          <span>꼬리 질문 포함하기</span>
+        </label>
+        <span class="relative group inline-flex items-center cursor-help" tabindex="0">
+          <svg class="w-4 h-4 text-slate-400 hover:text-slate-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div class="hidden group-hover:block group-focus-within:block absolute left-6 -top-1 z-30 w-72 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl">
+            <p class="font-semibold mb-1.5">꼬리 질문이란?</p>
+            <p class="leading-relaxed mb-2 text-slate-200">방금 답변을 보고, 부족하거나 더 확인하고 싶은 부분을 면접관이 그 자리에서 추가로 묻는 질문입니다.</p>
+            <p class="text-slate-400">위에서 정한 질문 개수에는 포함되지 않으며, 면접이 평소보다 길어질 수 있습니다.</p>
+          </div>
+        </span>
+      </div>
+
+      <!-- 압박 질문 토글 + 도움말 팝업 -->
+      <div class="flex items-center gap-1.5 text-sm text-slate-700">
+        <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input id="enablePressure" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
+          <span>압박 질문 추가</span>
+        </label>
+        <span class="relative group inline-flex items-center cursor-help" tabindex="0">
+          <svg class="w-4 h-4 text-slate-400 hover:text-slate-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div class="hidden group-hover:block group-focus-within:block absolute left-6 -top-1 z-30 w-80 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl">
+            <p class="font-semibold mb-1.5">압박 질문이란?</p>
+            <p class="leading-relaxed mb-2 text-slate-200">지원자의 감정을 흔드는 질문을 통해 평정심·사고력·대응력을 테스트하는 면접 기법입니다. 이력서에서 검증이 필요한 부분에 근거해 도전적인 질문이 추가됩니다.</p>
+            <p class="text-slate-400 mb-1">상당히 부정적인 경험이 될 수 있어 기본적으로 비활성화돼 있습니다.</p>
+            <p class="text-slate-400">압박 포인트가 없으면 추가되지 않을 수 있습니다. 어떤 수위에서도 모욕·차별·사생활 질문은 금지됩니다.</p>
+          </div>
+        </span>
+      </div>
+
+      <button id="startBtn"
+        class="ml-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed">
+        면접 시작
+      </button>
+    </div>
+
+    <!-- 압박 수위 슬라이더 — 체크박스 ON 시에만 표시 -->
+    <div id="pressureLevelBox" class="hidden mt-3 ml-1 pl-3 border-l-2 border-rose-200">
+      <div class="flex items-center gap-3 flex-wrap">
+        <label class="text-sm text-rose-800 font-medium whitespace-nowrap">압박 수위</label>
+        <span id="pressureLevelLabel" class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded text-xs font-bold tabular-nums">5</span>
+        <input id="pressureLevel" type="range" min="1" max="10" step="1" value="5"
+               class="w-40 accent-rose-600" />
+        <span class="text-[11px] text-slate-500 whitespace-nowrap">1 표준 검증 · 10 최대 비판</span>
+      </div>
+    </div>
+
+    <p id="setupError" class="text-sm text-rose-600 mt-3 hidden"></p>
+
+    <!-- 진행률 표시 (면접 준비 중에만) -->
+    <div id="preparingBox" class="hidden mt-5 p-5 bg-indigo-50 border border-indigo-200 rounded-xl">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-5 h-5 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin"></div>
+        <p id="preparingMessage" class="text-sm font-semibold text-indigo-800">이력서를 살펴보고 있어요</p>
+      </div>
+      <div class="w-full bg-white rounded-full h-2 overflow-hidden">
+        <div id="preparingBar" class="h-full bg-indigo-600 transition-all duration-500" style="width:0%"></div>
+      </div>
+      <p class="text-[11px] text-indigo-700/70 mt-2">잠시만 기다려 주세요</p>
+    </div>
+  </section>
+
+  <!-- ============= STEP 2: 면접 진행 ============= -->
+  <section id="step-interview" class="hidden-section bg-white rounded-2xl shadow-sm border border-slate-200 p-8 mt-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold">2. 면접 진행 중</h2>
+      <span id="progress" class="text-sm font-semibold text-slate-500">질문 1 / 1</span>
+    </div>
+
+    <!-- 카메라 영역 — 사용자에게는 카메라 영상만 보여지도록 단순화 -->
+    <div id="cameraBox" class="hidden mb-5">
+      <div class="bg-slate-900 rounded-xl overflow-hidden relative aspect-video max-w-3xl mx-auto">
+        <video id="camVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+        <!-- 분석용 캔버스 — 비어있는 상태로 유지 (포인트 클라우드 그리지 않음) -->
+        <canvas id="camOverlay" class="absolute inset-0 w-full h-full pointer-events-none hidden"></canvas>
+      </div>
+    </div>
+
+    <div id="currentQuestionBox" class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <p id="currentQuestionLabel" class="text-xs font-semibold text-indigo-700">현재 질문</p>
+        <span id="pressureBadge" class="hidden inline-flex items-center gap-1 px-2 py-0.5 bg-rose-600 text-white rounded-full text-[10px] font-bold tracking-wide">
+          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v5a1 1 0 11-2 0V3a1 1 0 011-1zm0 12a1.25 1.25 0 100 2.5A1.25 1.25 0 0010 14z"/></svg>
+          압박 질문
+        </span>
+        <span id="followupBadge" class="hidden inline-flex items-center px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">꼬리 질문</span>
+      </div>
+      <h3 id="currentQuestion" class="text-xl font-bold leading-snug">질문 로딩 중...</h3>
+    </div>
+
+    <!-- 답변 입력 — 녹음 모드 -->
+    <div id="recordPane" class="flex items-center gap-6">
+      <button id="recordBtn"
+        class="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shrink-0 transition">
+        <svg id="recordIcon" class="w-9 h-9 ml-1" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      </button>
+      <div class="flex-1 min-w-0">
+        <p id="recordStatus" class="text-sm font-semibold text-slate-700">버튼을 눌러 녹음 시작</p>
+        <p id="recordTimer" class="text-xs text-slate-500 mt-1">0.0초 / 최대 180초</p>
+      </div>
+      <button id="toggleTextBtn"
+        class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition shrink-0">
+        ✎ 텍스트로 적기
+      </button>
+      <button id="nextBtn"
+        class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled>
+        다음 →
+      </button>
+    </div>
+
+    <!-- 답변 입력 — 텍스트 모드 -->
+    <div id="textPane" class="hidden">
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-sm font-semibold text-slate-700">답변을 직접 입력하세요</p>
+        <button id="toggleRecordBtn"
+          class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition">
+          🎙 녹음으로 돌아가기
+        </button>
+      </div>
+      <textarea id="textAnswer" rows="5"
+        class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-y"
+        placeholder="답변 내용을 한국어로 입력하세요..."></textarea>
+      <div class="flex justify-end gap-2 mt-3">
+        <button id="submitTextBtn"
+          class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-sm font-semibold transition disabled:opacity-50">
+          답변 제출
+        </button>
+        <button id="submitTextNextBtn"
+          class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50">
+          제출 후 다음 →
+        </button>
+      </div>
+    </div>
+
+    <div id="transcriptBox" class="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-4 hidden">
+      <p class="text-xs font-semibold text-slate-500 mb-2">제출된 답변</p>
+      <p id="transcript" class="text-sm text-slate-700 leading-relaxed"></p>
+    </div>
+
+    <p id="interviewError" class="text-sm text-rose-600 mt-3 hidden"></p>
+  </section>
+
+  <!-- ============= STEP 3: 결과 ============= -->
+  <section id="step-result" class="hidden-section mt-6 space-y-6">
+    <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white">
+      <p class="text-xs font-semibold opacity-80 mb-3">최종 종합 점수</p>
+      <div class="flex items-baseline gap-2 mb-6">
+        <span id="finalScore" class="text-6xl font-black">0.0</span>
+        <span class="text-xl opacity-80">/ 100</span>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div>
+          <div class="flex justify-between mb-1">
+            <span>답변(내용)</span>
+            <span id="contentScore" class="font-semibold">0 / 80</span>
+          </div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="contentBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between mb-1">
+            <span>비언어</span>
+            <span id="nonverbalScore" class="font-semibold">0 / 20</span>
+          </div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="nonverbalBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 비언어 피드백 (4o-mini) -->
+    <div id="nonverbalCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
+
+    <!-- 질문별 평가 카드 -->
+    <div id="qaCards" class="space-y-4"></div>
+
+    <!-- 다운로드 -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-3">다운로드</h3>
+      <div class="flex flex-wrap gap-2">
+        <a id="dlTxt" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">리포트 (TXT)</a>
+        <a id="dlJson" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">데이터 (JSON)</a>
+        <div id="resultVideoDownloads" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
+        <a id="dlAnalysis" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">분석 보기</a>
+        <a id="dlDetail" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">상세 + 공유</a>
+        <a href="/history" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">면접 기록</a>
+        <button onclick="location.reload()" class="ml-auto px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold">새 면접 시작</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script type="module">
+import { FaceAnalyzer } from '/static/face_analyzer.js?v=20260515';
+
+// ===================== 상태 =====================
+let currentUser = null;
+let sessionId = null;
+let questions = [];
+let qIdx = 0;
+let mediaRecorder = null;
+let audioChunks = [];
+let recordStart = 0;
+let recordTimerInterval = null;
+let isRecording = false;
+const MAX_SECONDS = 180;
+
+// 신규: 모델/카메라/얼굴 분석
+let selectedModel = 'gpt-4o-mini';
+let camMode = 'realtime';   // 'realtime' | 'record' | 'off'
+let camStream = null;        // getUserMedia 스트림
+let faceAnalyzer = null;     // FaceAnalyzer 인스턴스
+let useTextMode = false;     // 텍스트 입력 모드 활성화 여부
+let followupsEnabled = false; // 꼬리질문 사용 여부 (시작 시 결정)
+let pressureEnabled = false;  // 압박 질문 사용 여부 (시작 시 결정)
+let criticismLevel = 5;       // 1~10
+
+// 영상 녹화 (카메라 모드 != off 일 때)
+let videoRecorder = null;
+let videoChunks = [];
+let isVideoRecording = false;
+
+// ===================== DOM =====================
+const $ = (id) => document.getElementById(id);
+const setStatus = (msg) => $('status').textContent = msg;
+const showError = (boxId, msg) => {
+  const el = $(boxId);
+  el.textContent = msg;
+  el.classList.remove('hidden');
+};
+
+function updateProgress(percent, message) {
+  if (typeof percent === 'number') {
+    $('preparingBar').style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  }
+  if (message) {
+    $('preparingMessage').textContent = message;
+  }
+}
+
+// ===================== 사용자 정보 / 로그아웃 =====================
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/auth/me');
+    if (res.status === 401) {
+      location.href = '/login';
+      return;
+    }
+    if (!res.ok) throw new Error('사용자 정보 조회 실패');
+    currentUser = await res.json();
+    renderUserMenu();
+  } catch (e) {
+    console.error(e);
+    // 401 외의 오류는 그냥 메뉴만 안 보여줌
+  }
+}
+
+function renderUserMenu() {
+  if (!currentUser) return;
+  $('userName').textContent = currentUser.name || currentUser.email;
+  $('userEmail').textContent = currentUser.email;
+  $('userRole').textContent = currentUser.role || 'user';
+  $('userInitial').textContent = (currentUser.name || currentUser.email || 'U')[0].toUpperCase();
+  $('userMenu').classList.remove('hidden');
+}
+
+$('userBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('userDropdown').classList.toggle('hidden');
+});
+
+// ===================== 압박 질문 토글 + 수위 슬라이더 =====================
+function syncPressureUI() {
+  const on = !!$('enablePressure').checked;
+  $('pressureLevelBox').classList.toggle('hidden', !on);
+}
+$('enablePressure')?.addEventListener('change', syncPressureUI);
+// 슬라이더 값을 실시간으로 라벨에 반영
+$('pressureLevel')?.addEventListener('input', (e) => {
+  $('pressureLevelLabel').textContent = String(e.target.value);
+});
+// 초기 동기화 (브라우저가 체크 상태를 기억하고 있을 때 대비)
+syncPressureUI();
+
+document.addEventListener('click', () => {
+  $('userDropdown')?.classList.add('hidden');
+});
+
+$('logoutBtn')?.addEventListener('click', async () => {
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+  } finally {
+    location.href = '/login';
+  }
+});
+
+// 페이지 로드 시 사용자 정보 조회
+loadCurrentUser();
+
+// ===================== 면접 재개 (localStorage + 서버 상태 조회) =====================
+// 사용자가 면접 도중 새로고침·탭종료·튕김 등이 발생했을 때
+// 서버 메모리(SESSIONS)에 세션이 살아있으면 이어서 진행할 수 있게 함.
+const RESUME_KEY = 'signalcatch:resume_sid';
+const LEGACY_RESUME_KEY = 'mocktalk:resume_sid';   // 옛 키 — 마이그레이션용
+const RESUME_TTL_MS = 24 * 60 * 60 * 1000;   // 24시간 지난 항목은 무시
+
+// 1회성 마이그레이션: 옛 키에 저장된 진행중 면접이 있으면 새 키로 이전 후 삭제
+(function migrateResumeKey() {
+  try {
+    const legacy = localStorage.getItem(LEGACY_RESUME_KEY);
+    if (legacy && !localStorage.getItem(RESUME_KEY)) {
+      localStorage.setItem(RESUME_KEY, legacy);
+    }
+    if (legacy) localStorage.removeItem(LEGACY_RESUME_KEY);
+  } catch (e) { /* 무시 */ }
+})();
+
+function saveResumePoint(sid) {
+  try {
+    localStorage.setItem(RESUME_KEY, JSON.stringify({ sid, savedAt: Date.now() }));
+  } catch (e) { /* localStorage 막힌 환경(시크릿 등)이면 그냥 무시 */ }
+}
+function clearResumePoint() {
+  try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
+}
+function readResumePoint() {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.sid) return null;
+    if (Date.now() - (d.savedAt || 0) > RESUME_TTL_MS) {
+      clearResumePoint();
+      return null;
+    }
+    return d;
+  } catch (e) { return null; }
+}
+
+async function probeResume() {
+  const local = readResumePoint();
+  if (!local) return;
+  try {
+    const r = await fetch(`/api/interview/${encodeURIComponent(local.sid)}/state`, { credentials: 'same-origin' });
+    if (r.status === 401) { /* 비로그인 — 무시 */ return; }
+    if (!r.ok) return;
+    const state = await r.json();
+    if (state.completed) {
+      // 이미 결과까지 나온 면접 → 결과 페이지로
+      clearResumePoint();
+      location.href = `/result/${encodeURIComponent(local.sid)}`;
+      return;
+    }
+    if (!state.exists) {
+      // 서버가 재시작됐거나 만료 — 안내 없이 조용히 삭제
+      clearResumePoint();
+      return;
+    }
+    const total    = (state.questions || []).filter(q => !(q && q.is_followup)).length;
+    const answered = (state.answered_indices || []).filter(i =>
+      !((state.questions || [])[i] && state.questions[i].is_followup)
+    ).length;
+    $('resumeProgressText').textContent =
+      `${answered} / ${total} 문항까지 답변하셨어요. 이어서 진행할 수 있습니다.`;
+    $('resumeBanner').classList.remove('hidden');
+
+    $('resumeBtn').onclick = () => resumeInterview(state, local.sid);
+    $('discardResumeBtn').onclick = () => {
+      if (!confirm('진행 중이던 면접을 버리고 새로 시작할까요?')) return;
+      clearResumePoint();
+      $('resumeBanner').classList.add('hidden');
+    };
+  } catch (e) {
+    // 네트워크 등 일시 오류 — 다음 새로고침에 다시 시도
+  }
+}
+
+async function resumeInterview(state, sid) {
+  $('resumeBanner').classList.add('hidden');
+  try {
+    // 1) 변수 복원
+    sessionId        = sid;
+    questions        = state.questions || [];
+    qIdx             = Math.max(0, Math.min(state.first_unanswered || 0, questions.length - 1));
+    selectedModel    = state.model || 'gpt-4o-mini';
+    camMode          = state.cam_mode || 'realtime';
+    followupsEnabled = !!state.enable_followups;
+
+    // 2) UI 전환
+    $('step-setup').classList.add('hidden-section');
+    $('step-interview').classList.remove('hidden-section');
+
+    // 3) 카메라 재시작 (camMode=off 면 건너뜀)
+    try {
+      await setupCameraIfNeeded();
+    } catch (e) {
+      // 카메라 재요청 실패 — 진행은 가능
+      console.warn('[Resume] 카메라 재시작 실패:', e);
+    }
+
+    // 4) 첫 미답변 질문 표시
+    showQuestion();
+    setStatus('이전 면접에서 이어서 진행 중');
+  } catch (e) {
+    alert('이어서 진행하는 중 문제가 발생했어요. 새로 시작해 주세요.\n' + e.message);
+    clearResumePoint();
+    location.reload();
+  }
+}
+
+// ?replay={sid} 가 있으면 (관리자 디버깅 replay) 배너 없이 즉시 진입
+async function autoEnterReplay() {
+  const params = new URLSearchParams(location.search);
+  const replaySid = params.get('replay');
+  if (!replaySid) return false;
+  try {
+    const r = await fetch(`/api/interview/${encodeURIComponent(replaySid)}/state`, { credentials:'same-origin' });
+    if (r.status === 401) { location.href='/login'; return true; }
+    if (!r.ok) return false;
+    const state = await r.json();
+    if (!state || !state.exists) {
+      alert('재시도 면접 세션을 찾을 수 없어요. 서버가 재시작됐을 수 있습니다.');
+      // 쿼리 파라미터 제거하고 새로 시작 화면으로
+      history.replaceState(null, '', '/');
+      return false;
+    }
+    // URL 깔끔하게 정리하고 진입
+    history.replaceState(null, '', '/');
+    await resumeInterview(state, replaySid);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+(async () => {
+  const replayed = await autoEnterReplay();
+  if (!replayed) probeResume();
+})();
+
+// ===================== 카드 라디오 토글 (model / cam) =====================
+function syncCards(name, className) {
+  document.querySelectorAll(`input[name="${name}"]`).forEach(input => {
+    const card = input.closest('.' + className);
+    if (!card) return;
+    card.addEventListener('click', () => {
+      input.checked = true;
+      document.querySelectorAll('.' + className).forEach(c => {
+        c.classList.remove('card-selected');
+        c.classList.add('card-default');
+      });
+      card.classList.remove('card-default');
+      card.classList.add('card-selected');
+      onCardChange();
+    });
+  });
+}
+function onCardChange() {
+  selectedModel = document.querySelector('input[name="aiModel"]:checked')?.value || 'gpt-4o-mini';
+  camMode = document.querySelector('input[name="camMode"]:checked')?.value || 'realtime';
+}
+syncCards('aiModel', 'model-card');
+syncCards('camMode', 'cam-card');
+onCardChange();
+
+// ===================== STEP 1: 이력서 입력 =====================
+const fileInput = $('resumeFile');
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  $('filename').textContent = f ? f.name : '클릭해서 파일 선택';
+});
+
+$('startBtn').addEventListener('click', async () => {
+  $('setupError').classList.add('hidden');
+  const text = $('resumeText').value.trim();
+  const file = fileInput.files[0];
+  if (!text && !file) {
+    showError('setupError', '이력서 텍스트 또는 파일을 입력하세요.');
+    return;
+  }
+  $('startBtn').disabled = true;
+  $('startBtn').textContent = '준비 중...';
+  setStatus('준비 중');
+
+  // 진행률 박스 표시
+  $('preparingBox').classList.remove('hidden');
+  updateProgress(0, '시작 준비 중');
+
+  // 키보드 직접 입력으로 범위를 벗어난 값이 들어와도 안전하게 clamp
+  // (HTML max 속성은 화살표 버튼만 막고 직접 입력은 막지 못함)
+  function clampInt(el, lo, hi, fallback) {
+    const v = parseInt(el.value, 10);
+    if (Number.isNaN(v)) return fallback;
+    const clamped = Math.max(lo, Math.min(hi, v));
+    if (clamped !== v) el.value = String(clamped);   // UI 도 정정
+    return clamped;
+  }
+  const nPersonalized = clampInt($('nPersonalized'), 0, 15, 2);
+  const nCommon       = clampInt($('nCommon'),       0, 10, 1);
+
+  try {
+    const form = new FormData();
+    if (file) form.append('resume_file', file);
+    if (text) form.append('resume_text', text);
+    form.append('n_personalized', String(nPersonalized));
+    form.append('n_common',       String(nCommon));
+    form.append('model', selectedModel);
+    form.append('cam_mode', camMode);
+    form.append('enable_followups', $('enableFollowups').checked ? 'true' : 'false');
+    // 면접 진행 화면이 꼬리질문 분기를 알아야 하므로 클라이언트 변수에도 보관
+    followupsEnabled = $('enableFollowups').checked;
+
+    // 압박 질문 — 체크박스가 ON 이면 additive 모드, 아니면 off
+    pressureEnabled = !!$('enablePressure').checked;
+    criticismLevel  = clampInt($('pressureLevel'), 1, 10, 5);
+    form.append('pressure_mode',    pressureEnabled ? 'additive' : 'off');
+    form.append('criticism_level',  String(criticismLevel));
+
+    // 회사·직무 정보 (선택). 비어있으면 보내지 않음.
+    const _company = ($('companyName')?.value || '').trim();
+    const _jobTtl  = ($('jobTitle')?.value || '').trim();
+    const _coText  = ($('companyText')?.value || '').trim();
+    if (_company) form.append('company_name', _company);
+    if (_jobTtl)  form.append('job_title',    _jobTtl);
+    if (_coText)  form.append('company_text', _coText);
+
+    const res = await fetch('/api/interview/start-stream', { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || '시작 실패');
+    }
+
+    // 스트리밍 응답 읽기
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let switchedToInterview = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      // SSE 메시지 단위: "\n\n"
+      const parts = buf.split('\n\n');
+      buf = parts.pop() || '';
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+        let payload;
+        try { payload = JSON.parse(line.slice(5).trim()); } catch { continue; }
+
+        if (payload.type === 'status') {
+          updateProgress(payload.progress ?? 0, payload.message || '');
+        } else if (payload.type === 'questions') {
+          // 질문 텍스트 수신 → 면접 화면으로 즉시 전환
+          sessionId = payload.session_id;
+          questions = payload.questions;
+          qIdx = 0;
+          updateProgress(payload.progress ?? 85, payload.message || '');
+
+          // 재개 지점 저장 — 이후 새로고침/튕김 시 이어서 진행 가능
+          saveResumePoint(sessionId);
+
+          if (!switchedToInterview) {
+            switchedToInterview = true;
+            $('preparingBox').classList.add('hidden');
+            $('step-setup').classList.add('hidden-section');
+            $('step-interview').classList.remove('hidden-section');
+            await setupCameraIfNeeded();
+            showQuestion();
+            setStatus('면접 시작');
+          }
+        } else if (payload.type === 'enriched') {
+          // 메타데이터 보강 — 메모리만 업데이트 (UI 영향 X)
+          questions = payload.questions;
+        } else if (payload.type === 'done') {
+          // 완료
+        } else if (payload.type === 'error') {
+          throw new Error(payload.message || '문제가 발생했어요');
+        }
+      }
+    }
+  } catch (e) {
+    $('preparingBox').classList.add('hidden');
+    showError('setupError', e.message);
+    $('startBtn').disabled = false;
+    $('startBtn').textContent = '면접 시작';
+  }
+});
+
+// ===================== STEP 2: 면접 진행 =====================
+function showQuestion() {
+  const q = questions[qIdx];
+  const qText = (typeof q === 'object' && q !== null) ? q.question : q;
+  const isFollowup = !!(typeof q === 'object' && q && q.is_followup);
+  const isPressure = !!(typeof q === 'object' && q && q.is_pressure);
+
+  $('currentQuestion').textContent = qText;
+
+  // 압박/꼬리 배지
+  $('pressureBadge')?.classList.toggle('hidden', !isPressure);
+  $('followupBadge')?.classList.toggle('hidden', !isFollowup);
+
+  // 압박 질문이면 카드 톤을 빨간색으로, 아니면 인디고로 (꼬리는 그대로 두되 호박 톤 가능)
+  const box = $('currentQuestionBox');
+  if (box) {
+    box.classList.remove('bg-indigo-50','border-indigo-200','bg-rose-50','border-rose-300','bg-amber-50','border-amber-200');
+    if (isPressure) {
+      box.classList.add('bg-rose-50','border-rose-300');
+      $('currentQuestionLabel').textContent = '현재 질문 (압박)';
+      $('currentQuestionLabel').classList.remove('text-indigo-700','text-amber-700');
+      $('currentQuestionLabel').classList.add('text-rose-700');
+    } else if (isFollowup) {
+      box.classList.add('bg-amber-50','border-amber-200');
+      $('currentQuestionLabel').textContent = '현재 질문 (꼬리)';
+      $('currentQuestionLabel').classList.remove('text-indigo-700','text-rose-700');
+      $('currentQuestionLabel').classList.add('text-amber-700');
+    } else {
+      box.classList.add('bg-indigo-50','border-indigo-200');
+      $('currentQuestionLabel').textContent = '현재 질문';
+      $('currentQuestionLabel').classList.remove('text-rose-700','text-amber-700');
+      $('currentQuestionLabel').classList.add('text-indigo-700');
+    }
+  }
+
+  // 진행 표시 — 꼬리질문은 본 질문 수에 포함하지 않음.
+  // 본 질문 인덱스/총합은 is_followup=false 인 항목만 카운트.
+  const totalOriginals = questions.filter(qq => !(qq && qq.is_followup)).length;
+  const currentOriginal = questions
+    .slice(0, qIdx + 1)
+    .filter(qq => !(qq && qq.is_followup)).length;
+
+  if (isFollowup) {
+    $('progress').innerHTML = `질문 ${currentOriginal} / ${totalOriginals} <span class="ml-1 inline-flex items-center px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold align-middle">꼬리 질문</span>${isPressure ? ' <span class="ml-1 inline-flex items-center px-1.5 py-0.5 bg-rose-600 text-white rounded text-[10px] font-bold align-middle">압박</span>' : ''}`;
+    setStatus(`${isPressure ? '압박 ' : ''}꼬리 질문 진행 중 (Q${currentOriginal})`);
+  } else if (isPressure) {
+    $('progress').innerHTML = `질문 ${currentOriginal} / ${totalOriginals} <span class="ml-1 inline-flex items-center px-1.5 py-0.5 bg-rose-600 text-white rounded text-[10px] font-bold align-middle">압박</span>`;
+    setStatus(`압박 질문 진행 중 (Q${currentOriginal})`);
+  } else {
+    $('progress').textContent = `질문 ${currentOriginal} / ${totalOriginals}`;
+    setStatus(`질문 ${currentOriginal} / ${totalOriginals}`);
+  }
+
+  $('transcriptBox').classList.add('hidden');
+  $('transcript').textContent = '';
+  $('nextBtn').disabled = true;
+  $('recordStatus').textContent = '버튼을 눌러 녹음 시작';
+  $('recordTimer').textContent = `0.0초 / 최대 ${MAX_SECONDS}초`;
+}
+
+$('recordBtn').addEventListener('click', async () => {
+  if (!isRecording) await startRecording();
+  else                stopRecording();
+});
+
+async function startRecording() {
+  try {
+    // 음성 전용 스트림 (Whisper 용). camStream 이 있어도 별도 audio-only 사용.
+    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(audioStream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+    mediaRecorder.onstop = onRecordingStop;
+    mediaRecorder.start();
+    isRecording = true;
+    recordStart = Date.now();
+
+    // 영상 녹화 — 카메라 모드 != off 면 동시에 진행
+    startVideoRecordingIfNeeded();
+
+    // UI 변경
+    $('recordIcon').outerHTML = '<svg id="recordIcon" class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+    $('recordBtn').classList.add('pulse-record');
+    $('recordStatus').textContent = '녹음 중... 답변 끝나면 버튼 또는 Enter';
+
+    // 타이머
+    recordTimerInterval = setInterval(() => {
+      const elapsed = (Date.now() - recordStart) / 1000;
+      $('recordTimer').textContent = `${elapsed.toFixed(1)}초 / 최대 ${MAX_SECONDS}초`;
+      if (elapsed >= MAX_SECONDS) stopRecording();
+    }, 100);
+  } catch (e) {
+    showError('interviewError', '마이크 권한이 필요합니다: ' + e.message);
+  }
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+  clearInterval(recordTimerInterval);
+  mediaRecorder.stop();
+  // 트랙 정리 (마이크 인디케이터 끄기)
+  mediaRecorder.stream.getTracks().forEach(t => t.stop());
+
+  // 영상도 함께 종료
+  stopVideoRecordingAndUpload();
+
+  // UI 복귀
+  $('recordIcon').outerHTML = '<svg id="recordIcon" class="w-9 h-9 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+  $('recordBtn').classList.remove('pulse-record');
+  $('recordStatus').textContent = '업로드 + 변환 중...';
+}
+
+// ===================== 영상 녹화 (카메라 모드 != off) =====================
+function _pickVideoMime() {
+  // 브라우저별 호환 — Chrome/Edge 는 vp9 OK, Safari 는 mp4 만 지원
+  const candidates = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4',
+  ];
+  for (const m of candidates) {
+    if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return '';   // 빈 문자열 = 브라우저 기본값
+}
+
+function startVideoRecordingIfNeeded() {
+  if (camMode === 'off' || !camStream) {
+    console.log('[Video] 녹화 스킵 — camMode:', camMode, 'stream:', !!camStream);
+    return;
+  }
+  try {
+    const mime = _pickVideoMime();
+    const opts = { videoBitsPerSecond: 500_000 };
+    if (mime) opts.mimeType = mime;
+    videoRecorder = new MediaRecorder(camStream, opts);
+    videoChunks = [];
+    videoRecorder.ondataavailable = (e) => { if (e.data && e.data.size) videoChunks.push(e.data); };
+    videoRecorder.start();
+    isVideoRecording = true;
+    $('recordingPill')?.classList.remove('hidden');
+    console.log('[Video] 녹화 시작 — mime:', mime || '(default)');
+  } catch (e) {
+    console.error('[Video] 녹화 시작 실패:', e);
+  }
+}
+
+function stopVideoRecordingAndUpload() {
+  if (!isVideoRecording || !videoRecorder) {
+    console.log('[Video] stop 호출됐지만 녹화 중 아님');
+    return;
+  }
+  isVideoRecording = false;
+  $('recordingPill')?.classList.add('hidden');
+  const indexAtStop = qIdx;
+  videoRecorder.onstop = async () => {
+    console.log(`[Video] Q${indexAtStop + 1} 녹화 종료 — chunks:`, videoChunks.length);
+    if (videoChunks.length === 0) {
+      console.warn('[Video] 빈 녹화 — 업로드 스킵');
+      return;
+    }
+    const blob = new Blob(videoChunks, { type: 'video/webm' });
+    console.log(`[Video] Q${indexAtStop + 1} 업로드 시작 — 크기 ${(blob.size/1024/1024).toFixed(2)} MB`);
+    const form = new FormData();
+    form.append('video', blob, `answer_${indexAtStop + 1}.webm`);
+    try {
+      const res = await fetch(`/api/interview/${sessionId}/video/${indexAtStop}`, {
+        method: 'POST', body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error(`[Video] Q${indexAtStop + 1} 업로드 실패 (${res.status}):`, err);
+      } else {
+        const data = await res.json();
+        console.log(`[Video] Q${indexAtStop + 1} 업로드 완료 →`, data.video_uri);
+      }
+    } catch (e) {
+      console.error(`[Video] Q${indexAtStop + 1} 업로드 예외:`, e);
+    }
+  };
+  videoRecorder.stop();
+}
+
+async function onRecordingStop() {
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  const form = new FormData();
+  form.append('audio', blob, 'answer.webm');
+  setStatus('답변을 정리하고 있어요');
+  try {
+    const res = await fetch(`/api/interview/${sessionId}/answer/${qIdx}`, {
+      method: 'POST', body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || '변환 실패');
+    }
+    const data = await res.json();
+    $('transcript').textContent = data.transcript || '(변환 결과 없음)';
+    $('transcriptBox').classList.remove('hidden');
+    $('recordStatus').textContent = '답변 완료. 다음 질문으로 진행하세요.';
+    $('nextBtn').disabled = false;
+    setStatus('답변 저장됨');
+  } catch (e) {
+    showError('interviewError', e.message);
+    $('recordStatus').textContent = '오류 발생. 다시 녹음하세요.';
+  }
+}
+
+// Enter 로 녹음 종료
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && isRecording) {
+    e.preventDefault();
+    stopRecording();
+  }
+});
+
+$('nextBtn').addEventListener('click', async () => {
+  // 꼬리질문 모드면, 이 답변에 대한 꼬리질문 생성 시도.
+  // 서버가 한도(체인 깊이/전체 횟수)를 체크하므로 클라이언트는 호출만 하면 됨.
+  if (followupsEnabled) {
+    const nb = $('nextBtn');
+    const origText = nb.textContent;
+    nb.disabled = true;
+    nb.textContent = '다음 질문 준비 중...';
+    setStatus('답변을 한 번 더 살펴보고 있어요');
+    try {
+      const r = await fetch(
+        `/api/interview/${encodeURIComponent(sessionId)}/maybe-followup/${qIdx}`,
+        { method: 'POST', credentials: 'same-origin' },
+      );
+      if (r.ok) {
+        const data = await r.json();
+        if (data && data.question) {
+          // 서버가 SESSIONS 에 이미 삽입했음. 클라 로컬에도 같은 위치에 삽입.
+          questions.splice(qIdx + 1, 0, data.question);
+        }
+      }
+    } catch (e) {
+      // 꼬리질문 실패는 무시 — 그냥 다음 본 질문으로 넘어감
+    }
+    nb.textContent = origText;
+    // disabled 는 showQuestion() 이 다시 잠그므로 그대로 둠
+  }
+
+  qIdx += 1;
+  if (qIdx < questions.length) {
+    showQuestion();
+  } else {
+    // 모든 질문 완료 → 비언어 메트릭 + 카메라 정리만 하고
+    // 평가/결과 렌더는 별도 페이지(/finalizing → /result)에 위임.
+    setStatus('답변을 정리하고 있어요');
+    try {
+      await collectAndSubmitNonverbal();
+    } catch (e) { /* 비언어 제출 실패해도 finalize 는 진행 */ }
+    try {
+      await stopCamera();
+    } catch (e) { /* ignore */ }
+    // 면접이 끝나 결과 단계로 넘어가므로 재개 지점은 더 이상 필요 없음
+    clearResumePoint();
+    // cam_mode 는 finalizing 페이지가 단계 라벨을 다르게 표시하기 위해 사용
+    location.href = `/finalizing/${encodeURIComponent(sessionId)}?cam=${encodeURIComponent(camMode || 'realtime')}`;
+  }
+});
+
+// ===================== STEP 3: 결과 =====================
+async function finalize() {
+  try {
+    const res = await fetch(`/api/interview/${sessionId}/finalize`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || '평가 실패');
+    }
+    const result = await res.json();
+    renderResult(result);
+    $('step-result').classList.remove('hidden-section');
+    setStatus('완료');
+  } catch (e) {
+    setStatus('오류');
+    alert('평가 실패: ' + e.message);
+  }
+}
+
+function renderResult(result) {
+  const final = result.final;
+  const items = (result.content_evaluation && result.content_evaluation.items) || [];
+  const qaPairs = result.qa_pairs || [];
+  const camOff = (result.cam_mode === 'off') || !final.nonverbal_available;
+
+  // 종합 점수 — 카메라 OFF 면 답변 80점 만점만 강조 / ON 이면 100점
+  if (camOff) {
+    $('finalScore').textContent = final.content_score_80.toFixed(1);
+    $('finalScore').nextElementSibling.textContent = '/ 80';
+    $('contentScore').textContent = `${final.content_score_80.toFixed(1)} / 80`;
+    $('contentBar').style.width = (final.content_score_80 / 80 * 100) + '%';
+    // 비언어 영역 숨김
+    const nvRow = $('nonverbalScore').closest('div').parentElement;
+    if (nvRow) nvRow.style.display = 'none';
+  } else {
+    $('finalScore').textContent = final.final_score_100.toFixed(1);
+    $('finalScore').nextElementSibling.textContent = '/ 100';
+    $('contentScore').textContent = `${final.content_score_80.toFixed(1)} / 80`;
+    $('nonverbalScore').textContent = `${final.nonverbal_score_20.toFixed(1)} / 20`;
+    $('contentBar').style.width = (final.content_score_80 / 80 * 100) + '%';
+    $('nonverbalBar').style.width = (final.nonverbal_score_20 / 20 * 100) + '%';
+  }
+
+  // 비언어 피드백 카드 (있을 때만)
+  renderNonverbalFeedback(result);
+
+  // 질문별 카드
+  const cards = $('qaCards');
+  cards.innerHTML = '';
+  qaPairs.forEach(([q, a], i) => {
+    const ev = items[i] || {};
+    const cs = ev.common_scores || {};
+    const customScores = ev.custom_scores || [];
+    const score = ev.content_score ?? 0;
+    const commonSub = ev.common_subtotal ?? 0;
+    const customSub = ev.custom_subtotal ?? 0;
+    const qText = (typeof q === 'object' && q !== null) ? q.question : q;
+    const qIntent = (typeof q === 'object' && q !== null) ? (q.intent || '') : '';
+
+    const strengths = (ev.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+    const improvements = (ev.improvements || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+    const sample = ev.sample_answer ? `
+      <details class="bg-indigo-50 border border-indigo-200 rounded-lg mt-3">
+        <summary class="cursor-pointer p-3 text-xs font-semibold text-indigo-700">모범 답변 예시 보기</summary>
+        <p class="px-3 pb-3 text-xs text-slate-700 leading-relaxed">${escapeHtml(ev.sample_answer)}</p>
+      </details>` : '';
+
+    const customRows = customScores.map(cp => `
+      <div class="flex items-center justify-between bg-slate-50 rounded p-2 text-xs">
+        <span class="text-slate-700 truncate pr-2">${escapeHtml(cp.point || '')}</span>
+        <span class="font-semibold shrink-0">${cp.score ?? 0} / 5</span>
+      </div>`).join('');
+
+    cards.insertAdjacentHTML('beforeend', `
+      <details class="bg-white rounded-2xl border border-slate-200 group" ${i === 0 ? 'open' : ''}>
+        <summary class="cursor-pointer p-5 flex items-center justify-between list-none">
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <span class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">Q${i + 1}</span>
+            <p class="font-semibold truncate">${escapeHtml(qText)}</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-sm font-bold text-indigo-600">${score} / 80</span>
+            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+          ${qIntent ? `<p class="text-xs text-slate-500"><b>질문 의도:</b> ${escapeHtml(qIntent)}</p>` : ''}
+          <div>
+            <p class="text-xs text-slate-500 mb-1">내 답변</p>
+            <p class="text-sm bg-slate-50 rounded-lg p-3 leading-relaxed">${escapeHtml(a)}</p>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-slate-700">공통 기준 (HOW)</p>
+              <span class="text-xs font-bold text-indigo-600">${commonSub} / 50</span>
+            </div>
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">의도</span><br/><b>${cs.question_understanding ?? 0}/9</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구조</span><br/><b>${cs.answer_structure ?? 0}/9</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">관련성</span><br/><b>${cs.resume_job_relevance ?? 0}/13</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구체성</span><br/><b>${cs.specificity ?? 0}/9</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">논리</span><br/><b>${cs.logic ?? 0}/6</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">간결</span><br/><b>${cs.conciseness ?? 0}/4</b></div>
+            </div>
+          </div>
+
+          ${customRows ? `
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-slate-700">맞춤 기준 (WHAT)</p>
+              <span class="text-xs font-bold text-indigo-600">${customSub} / 30</span>
+            </div>
+            <div class="space-y-1">${customRows}</div>
+          </div>` : ''}
+
+          ${strengths ? `<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            <p class="text-xs font-semibold text-emerald-700 mb-1.5">강점</p>
+            <ul class="text-xs text-slate-700 space-y-1 list-disc list-inside">${strengths}</ul>
+          </div>` : ''}
+          ${improvements ? `<div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p class="text-xs font-semibold text-amber-700 mb-1.5">개선점</p>
+            <ul class="text-xs text-slate-700 space-y-1 list-disc list-inside">${improvements}</ul>
+          </div>` : ''}
+          ${ev.content_feedback ? `<p class="text-xs text-slate-600">${escapeHtml(ev.content_feedback)}</p>` : ''}
+          ${sample}
+          <div class="border-t border-slate-100 pt-3 flex items-center justify-between">
+            <p class="text-xs text-slate-400">이 질문은 도움이 되셨나요? <span class="text-slate-300">(선택)</span></p>
+            ${renderStarRating(i + 1, null)}
+          </div>
+        </div>
+      </details>
+    `);
+  });
+
+  // 다운로드 링크
+  $('dlTxt').href = `/api/interview/${sessionId}/download/report.txt`;
+  $('dlJson').href = `/api/interview/${sessionId}/download/data.json`;
+  $('dlTxt').download = 'report.txt';
+  $('dlJson').download = 'data.json';
+  // 상세 페이지(공유 설정/삭제) + 분석 페이지 링크
+  const publicCode = result.public_code || sessionId;
+  $('dlDetail').href = `/session/${encodeURIComponent(publicCode)}`;
+  $('dlAnalysis').href = `/analysis/${encodeURIComponent(publicCode)}`;
+
+  // 영상 다운로드 버튼 (업로드된 질문만)
+  const vbox = $('resultVideoDownloads');
+  vbox.innerHTML = '';
+  const uploaded = result.video_uploaded || [];
+  uploaded.forEach((ok, i) => {
+    if (!ok) return;
+    const btn = document.createElement('button');
+    btn.className = 'px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium video-dl-btn';
+    btn.dataset.qno = i + 1;
+    btn.dataset.code = publicCode;
+    btn.textContent = `Q${i + 1} 영상`;
+    vbox.appendChild(btn);
+  });
+}
+
+// 영상 다운로드 핸들러 (결과 화면 공통)
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.video-dl-btn');
+  if (!btn) return;
+  const qNo = btn.dataset.qno;
+  const code = btn.dataset.code;
+  if (!qNo || !code) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '준비 중...';
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(code)}/video/${qNo}`);
+    if (!res.ok) throw new Error('영상을 불러올 수 없습니다.');
+    const data = await res.json();
+    const a = document.createElement('a');
+    a.href = data.url;
+    a.download = `answer_${qNo}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
+// ===================== 비언어 피드백 카드 =====================
+function renderNonverbalFeedback(result) {
+  const card = $('nonverbalCard');
+  const fb = result.nonverbal_feedback;
+  const metrics = result.nonverbal_metrics;
+  if (!fb || !metrics || !metrics.ok) {
+    card.classList.add('hidden');
+    return;
+  }
+  const s = metrics.scores_20 || {};
+  card.classList.remove('hidden');
+  card.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold">비언어 분석 피드백</h3>
+      <span class="text-xs text-slate-400">GPT-4o mini · ${metrics.score_20.toFixed(2)} / 20</span>
+    </div>
+    <p class="text-sm text-slate-700 leading-relaxed mb-4">${escapeHtml(fb.summary || '')}</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">표정 · ${s.smile?.score ?? '-'} / 6 — ${s.smile?.label ?? ''}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(fb.smile || '')}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">시선 · ${s.focus?.score ?? '-'} / 6 — ${s.focus?.label ?? ''}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(fb.focus || '')}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">깜빡임 · ${s.blink?.score ?? '-'} / 4 — ${s.blink?.label ?? ''}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(fb.blink || '')}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">자세 · ${s.posture?.score ?? '-'} / 4 — ${s.posture?.label ?? ''}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(fb.posture || '')}</p>
+      </div>
+    </div>
+    ${fb.next_action ? `<p class="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg p-3 mt-4"><b>다음 면접 전 우선 연습:</b> ${escapeHtml(fb.next_action)}</p>` : ''}
+  `;
+}
+
+// ===================== 카메라 / 얼굴 분석 / 텍스트 모드 =====================
+async function setupCameraIfNeeded() {
+  if (camMode === 'off') {
+    $('cameraBox').classList.add('hidden');
+    return;
+  }
+
+  try {
+    // 카메라 + 마이크 동시 캡처 (녹화용). 480p @ 15fps 로 용량 절감.
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 15, max: 20 },
+      },
+      audio: true,
+    });
+  } catch (e) {
+    showError('interviewError', '카메라 권한이 필요합니다: ' + e.message);
+    camMode = 'off';
+    return;
+  }
+
+  const video = $('camVideo');
+  video.srcObject = camStream;
+
+  if (camMode === 'realtime') {
+    $('cameraBox').classList.remove('hidden');
+  } else {
+    // record-only — 화면엔 안 보이지만 분석은 진행
+    $('cameraBox').classList.add('hidden');
+  }
+
+  // 캔버스 사이즈 동기화
+  const canvas = $('camOverlay');
+  video.addEventListener('loadedmetadata', () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }, { once: true });
+
+  // 얼굴 분석 시작 — 사용자에게는 카메라 영상만 보이고, 분석은 백그라운드에서만 진행
+  try {
+    faceAnalyzer = new FaceAnalyzer();
+    // canvas 는 분석기에 전달하되, _draw() 는 비어있어 시각화 X
+    await faceAnalyzer.start(video, canvas, null);
+  } catch (e) {
+    const detail = (e && (e.message || e.type || e.toString())) || JSON.stringify(e);
+    console.error('얼굴 분석 시작 실패:', detail, e);
+    // 사용자에게는 별도 알림 없이 카메라만 그대로 보임
+  }
+}
+
+async function stopCamera() {
+  if (faceAnalyzer) {
+    faceAnalyzer.stop();
+  }
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+}
+
+async function collectAndSubmitNonverbal() {
+  if (!faceAnalyzer || camMode === 'off') return null;
+  const metrics = faceAnalyzer.computeMetrics();
+  if (!metrics || !metrics.ok) return null;
+  try {
+    await fetch(`/api/interview/${sessionId}/nonverbal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metrics),
+    });
+  } catch (e) {
+    console.warn('비언어 metrics 제출 실패', e);
+  }
+  return metrics;
+}
+
+// ===================== 텍스트 입력 모드 =====================
+$('toggleTextBtn')?.addEventListener('click', () => {
+  useTextMode = true;
+  if (isRecording) stopRecording();
+  $('recordPane').classList.add('hidden');
+  $('textPane').classList.remove('hidden');
+  $('textAnswer').focus();
+});
+
+$('toggleRecordBtn')?.addEventListener('click', () => {
+  useTextMode = false;
+  $('textPane').classList.add('hidden');
+  $('recordPane').classList.remove('hidden');
+});
+
+async function submitTextAnswer() {
+  const text = $('textAnswer').value.trim();
+  if (!text) {
+    showError('interviewError', '답변을 입력해주세요.');
+    return false;
+  }
+  const btn1 = $('submitTextBtn');
+  const btn2 = $('submitTextNextBtn');
+  btn1.disabled = btn2.disabled = true;
+  const orig1 = btn1.textContent, orig2 = btn2.textContent;
+  btn1.textContent = '저장 중...';
+  btn2.textContent = '저장 중...';
+  try {
+    const res = await fetch(`/api/interview/${sessionId}/answer-text/${qIdx}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: text }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '저장 실패');
+    }
+    const data = await res.json();
+    $('transcript').textContent = data.transcript;
+    $('transcriptBox').classList.remove('hidden');
+    $('nextBtn').disabled = false;
+    $('textAnswer').value = '';
+    setStatus('답변 저장됨');
+    return true;
+  } catch (e) {
+    showError('interviewError', e.message);
+    return false;
+  } finally {
+    btn1.disabled = btn2.disabled = false;
+    btn1.textContent = orig1; btn2.textContent = orig2;
+  }
+}
+
+$('submitTextBtn')?.addEventListener('click', submitTextAnswer);
+
+$('submitTextNextBtn')?.addEventListener('click', async () => {
+  const ok = await submitTextAnswer();
+  if (ok) {
+    // 텍스트 모드 닫고 다음 질문 진행
+    $('textPane').classList.add('hidden');
+    $('recordPane').classList.remove('hidden');
+    useTextMode = false;
+    $('nextBtn').click();
+  }
+});
+
+// ===================== 질문 만족도 별점 위젯 =====================
+function renderStarRating(qNo, current) {
+  const cur = current ?? 0;
+  let html = `<div class="star-rate flex items-center gap-0.5" data-q="${qNo}" data-cur="${cur}">`;
+  for (let i = 1; i <= 5; i++) {
+    const active = i <= cur;
+    html += `<button type="button" data-v="${i}" class="text-lg leading-none ${active ? 'text-amber-400' : 'text-slate-300'} hover:text-amber-400 transition">★</button>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.star-rate button[data-v]');
+  if (!btn) return;
+  const wrap = btn.closest('.star-rate');
+  const qNo = wrap?.dataset.q;
+  const v = parseInt(btn.dataset.v, 10);
+  if (!qNo || !v || !sessionId) return;
+
+  // 같은 별을 다시 누르면 평점 취소
+  const cur = parseInt(wrap.dataset.cur || '0', 10);
+  const newRating = (cur === v) ? null : v;
+
+  // 즉시 시각 반영
+  wrap.dataset.cur = newRating ?? 0;
+  wrap.querySelectorAll('button[data-v]').forEach((b) => {
+    const i = parseInt(b.dataset.v, 10);
+    const on = newRating != null && i <= newRating;
+    b.classList.toggle('text-amber-400', on);
+    b.classList.toggle('text-slate-300', !on);
+  });
+
+  // 서버 저장 (실패해도 UI 는 유지)
+  try {
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/questions/${qNo}/rating`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: newRating }),
+    });
+  } catch (err) {
+    console.warn('평점 저장 실패', err);
+  }
+});
+
+// XSS 방지용 간단 이스케이프
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+</script>
+
+</body>
+</html>

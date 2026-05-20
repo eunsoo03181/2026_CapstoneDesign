@@ -1,0 +1,33 @@
+# 핵심 (질문 생성 / 답변 평가 / Whisper STT)
+openai>=1.30.0
+requests>=2.31.0       # CLOVA 재활성화 시 필요 (현재는 미사용해도 무해)
+
+# 음성 (콘솔 모드 전용)
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# 카메라 비언어 분석 (with_camera=True 일 때 필요)
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+
+# 이력서 파일 로더
+python-docx>=1.0.0     # .docx
+pypdf>=4.0.0           # .pdf
+olefile>=0.46          # .hwp
+
+# FastAPI 웹 서버
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9   # multipart/form-data (파일 업로드)
+itsdangerous>=2.1.0       # SessionMiddleware 의존성
+
+# DB
+sqlalchemy>=2.0.25
+alembic>=1.13.0           # 마이그레이션 (배포 단계)
+psycopg[binary]>=3.1.0    # PostgreSQL 드라이버 (Supabase)
+
+# 인증 (Google OAuth + 로컬 로그인)
+authlib>=1.3.0
+httpx>=0.27.0             # authlib 의존성
+bcrypt>=4.1.0             # 비밀번호 해시
+email-validator>=2.0.0    # pydantic EmailStr 검증

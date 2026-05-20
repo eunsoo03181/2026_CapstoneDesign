@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Signal Catch — 로고
+  컨셉: 면접 중 비언어/언어/음성 시그널을 "캐치" 하는 radar.
+  3겹의 호(파동) 가 중앙 dot 에 모이는 모양 — dot 이 catch 포인트.
+  사용처: 헤더 인라인, /static/favicon.svg, 외부 공유 thumbnail.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none"
+     role="img" aria-label="Signal Catch">
+  <!-- 가장 멀리 (옅음) -->
+  <path d="M 2 12 Q 16 -8 30 12" stroke="#a5b4fc" stroke-width="1.6"
+        stroke-linecap="round" fill="none" opacity="0.55"/>
+  <!-- 중간 -->
+  <path d="M 5 15 Q 16 0 27 15" stroke="#818cf8" stroke-width="2"
+        stroke-linecap="round" fill="none" opacity="0.85"/>
+  <!-- 가장 가까움 -->
+  <path d="M 9 18 Q 16 9 23 18" stroke="#6366f1" stroke-width="2.4"
+        stroke-linecap="round" fill="none"/>
+  <!-- 중앙 catch dot -->
+  <circle cx="16" cy="21" r="2.8" fill="#4f46e5"/>
+  <!-- dot 글로우 (살짝) -->
+  <circle cx="16" cy="21" r="4.5" fill="#4f46e5" opacity="0.15"/>
+</svg>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>Signal Catch — 면접 결과</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>body{font-family:'Pretendard Variable',system-ui,sans-serif}</style>
+<script src="/static/admin_chrome.js?v=board" defer></script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+  <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+      <h1 class="text-lg font-bold tracking-tight">Signal Catch
+        <span class="text-slate-400 font-normal text-sm">면접 결과</span>
+      </h1>
+    </a>
+    <nav class="flex items-center gap-5 text-sm">
+      <a href="/" class="text-slate-600 hover:text-slate-900">새 면접</a>
+      <a href="/history" class="text-slate-600 hover:text-slate-900">면접 기록</a>
+      <a href="/board" class="text-slate-600 hover:text-slate-900">공유 게시판</a>
+      <button id="logoutBtn" class="text-slate-500 hover:text-rose-600 transition">로그아웃</button>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10 space-y-6">
+
+  <div id="loading" class="text-center py-20 text-slate-400 text-sm">결과 불러오는 중...</div>
+
+  <div id="errorBox" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-5 text-sm text-rose-700">
+    <p id="errorMsg"></p>
+    <p class="mt-2"><a href="/history" class="underline">면접 기록</a> 에서 다시 확인할 수 있어요.</p>
+  </div>
+
+  <div id="content" class="hidden space-y-6">
+    <!-- 종합 점수 -->
+    <section class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white">
+      <div class="flex items-start justify-between gap-4 mb-3">
+        <p class="text-xs font-semibold opacity-80">최종 종합 점수</p>
+        <p id="modelChip" class="hidden text-[11px] font-mono bg-white/15 px-2 py-0.5 rounded">사용 모델 <span id="modelChipVal">--</span></p>
+      </div>
+      <div class="flex items-baseline gap-2 mb-6">
+        <span id="finalScore" class="text-6xl font-black">0.0</span>
+        <span id="finalMax" class="text-xl opacity-80">/ 100</span>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div>
+          <div class="flex justify-between mb-1">
+            <span>답변(내용)</span>
+            <span id="contentScore" class="font-semibold">0 / 80</span>
+          </div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="contentBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="nvRow">
+          <div class="flex justify-between mb-1">
+            <span>시각 비언어 (표정·시선·자세)</span>
+            <span id="visualScore" class="font-semibold">0 / 10</span>
+          </div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="visualBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="voiceRow">
+          <div class="flex justify-between mb-1">
+            <span>음성 비언어 (말 속도·침묵·전달)</span>
+            <span id="voiceScore" class="font-semibold">0 / 10</span>
+          </div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="voiceBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+        <!-- 하위 호환용 (기존 JS 참조 잔재 — 표시는 안 함) -->
+        <input type="hidden" id="nonverbalScore" value="">
+        <input type="hidden" id="nonverbalBar" value="">
+      </div>
+    </section>
+
+    <!-- 비언어 피드백 -->
+    <div id="nonverbalCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
+
+    <!-- 비언어 측정 지표 추이 (시간축 차트 + 평가 기준 설명) -->
+    <div id="nonverbalDetails" class="hidden bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-3">시각 측정 지표 추이</h3>
+      <div id="nonverbalDetailsBody"></div>
+    </div>
+
+    <!-- 음성 비언어 카드 -->
+    <div id="voiceCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
+
+    <!-- 답변 일관성 검증 카드 -->
+    <div id="consistencyCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
+
+    <!-- 질문별 평가 카드 -->
+    <div id="qaCards" class="space-y-4"></div>
+
+    <!-- 다운로드 + 다음 액션 -->
+    <section class="bg-white border border-slate-200 rounded-2xl p-6">
+      <h3 class="font-bold mb-3">다운로드 · 다음 단계</h3>
+      <div class="flex flex-wrap gap-2">
+        <a id="dlTxt" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">리포트 (TXT)</a>
+        <a id="dlJson" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">데이터 (JSON)</a>
+        <div id="resultVideoDownloads" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-100">
+        <a id="dlAnalysis" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">분석 보기</a>
+        <a id="dlDetail" href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">상세 · 공유 설정</a>
+        <a href="/history" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">면접 기록</a>
+        <a href="/" class="ml-auto px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold">새 면접 시작</a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { renderNonverbalDetails } from '/static/nonverbal_charts.js?v=20260515';
+import { renderVoiceCard, renderConsistencyCard } from '/static/nonverbal_extras.js?v=20260516';
+
+const SID = decodeURIComponent(location.pathname.split('/').pop());
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function computeQuestionLabels(items) {
+  // items: 각 요소는 질문 객체(또는 [질문객체, 답변])
+  const labels = [];
+  let main = 0, fu = 0;
+  for (const it of (items || [])) {
+    const q = Array.isArray(it) ? it[0] : it;
+    const id = String(q?.question_id || q?.question_id_str || '');
+    const isFu = id.startsWith('FU') || q?.is_followup === true;
+    if (isFu) { fu += 1; labels.push(main > 0 ? `Q${main}-${fu}` : `FU${fu}`); }
+    else      { main += 1; fu = 0; labels.push(`Q${main}`); }
+  }
+  return labels;
+}
+
+$('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', {method:'POST'});
+  location.href = '/login';
+});
+
+// ---------- 별점 (인라인 수정 가능) ----------
+function renderStarRating(qNo, current) {
+  const v = current ? Number(current) : 0;
+  const stars = [1, 2, 3, 4, 5].map(n =>
+    `<button data-rate="${n}" data-q="${qNo}"
+       class="star-btn px-0.5 ${n <= v ? 'text-amber-400' : 'text-slate-300'} hover:text-amber-500 transition">
+       <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20">
+         <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
+       </svg>
+     </button>`).join('');
+  return `<div class="star-row inline-flex" data-q="${qNo}">${stars}</div>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const star = e.target.closest('.star-btn');
+  if (!star) return;
+  const qNo  = Number(star.dataset.q);
+  const rate = Number(star.dataset.rate);
+  // public_code 는 sessionId 와 동일하다고 가정 (DB persist 시점에 통일됨)
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(SID)}/questions/${qNo}/rate`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({user_satisfaction: rate}),
+    });
+    if (!res.ok) throw new Error('저장 실패');
+    // 별 색상 갱신
+    const row = star.closest('.star-row');
+    row.querySelectorAll('.star-btn').forEach(b => {
+      b.classList.toggle('text-amber-400', Number(b.dataset.rate) <= rate);
+      b.classList.toggle('text-slate-300', Number(b.dataset.rate) >  rate);
+    });
+  } catch(err) { /* ignore */ }
+});
+
+// ---------- 결과 렌더 ----------
+function renderResult(result) {
+  const final = result.final || {};
+  const items = (result.content_evaluation && result.content_evaluation.items) || [];
+  const qaPairs = result.qa_pairs || [];
+  const camOff = (result.cam_mode === 'off') || !final.nonverbal_available;
+
+  // 모델 칩
+  if (result.model_used) {
+    $('modelChipVal').textContent = result.model_used;
+    $('modelChip').classList.remove('hidden');
+  }
+
+  // 시각/음성 분리 표시 — 둘 다 없으면 100점 환산 의미 없으므로 80점 만점 모드
+  const visualAvail = !!final.visual_available;
+  const voiceAvail  = !!final.voice_available;
+  const anyNonverbal = visualAvail || voiceAvail;
+
+  $('contentScore').textContent = `${(final.content_score_80 ?? 0).toFixed(1)} / 80`;
+  $('contentBar').style.width = ((final.content_score_80 ?? 0) / 80 * 100) + '%';
+
+  if (!anyNonverbal) {
+    $('finalScore').textContent = (final.content_score_80 ?? 0).toFixed(1);
+    $('finalMax').textContent = '/ 80';
+    $('nvRow').style.display = 'none';
+    const voiceRow = $('voiceRow'); if (voiceRow) voiceRow.style.display = 'none';
+  } else {
+    $('finalScore').textContent = (final.final_score_100 ?? 0).toFixed(1);
+    $('finalMax').textContent = '/ 100';
+    const v10 = final.visual_score_10 ?? 0;
+    const vo10 = final.voice_score_10 ?? 0;
+    $('visualScore').textContent = visualAvail ? `${v10.toFixed(1)} / 10` : '미수집 / 10';
+    $('visualBar').style.width = (v10 / 10 * 100) + '%';
+    $('voiceScore').textContent  = voiceAvail  ? `${vo10.toFixed(1)} / 10` : '미수집 / 10';
+    $('voiceBar').style.width = (vo10 / 10 * 100) + '%';
+  }
+
+  renderNonverbalFeedback(result);
+  renderVoiceCard($('voiceCard'), result.voice_eval, result.voice_per_question);
+  renderConsistencyCard($('consistencyCard'), result.consistency_checks, qaPairs);
+
+  // 질문 카드
+  const cards = $('qaCards');
+  cards.innerHTML = '';
+  const qLabels = computeQuestionLabels(qaPairs);
+  qaPairs.forEach(([q, a], i) => {
+    const ev = items[i] || {};
+    const cs = ev.common_scores || {};
+    const customScores = ev.custom_scores || [];
+    const score = ev.content_score ?? 0;
+    const commonSub = ev.common_subtotal ?? 0;
+    const customSub = ev.custom_subtotal ?? 0;
+    const qText = (typeof q === 'object' && q !== null) ? q.question : q;
+    const qIntent = (typeof q === 'object' && q !== null) ? (q.intent || '') : '';
+
+    const strengths = (ev.strengths || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+    const improvements = (ev.improvements || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+    const sample = ev.sample_answer ? `
+      <details class="bg-indigo-50 border border-indigo-200 rounded-lg mt-3">
+        <summary class="cursor-pointer p-3 text-xs font-semibold text-indigo-700">모범 답변 예시 보기</summary>
+        <p class="px-3 pb-3 text-xs text-slate-700 leading-relaxed">${escapeHtml(ev.sample_answer)}</p>
+      </details>` : '';
+    const customRows = customScores.map(cp => `
+      <div class="flex items-center justify-between bg-slate-50 rounded p-2 text-xs">
+        <span class="text-slate-700 truncate pr-2">${escapeHtml(cp.point || '')}</span>
+        <span class="font-semibold shrink-0">${cp.score ?? 0} / 5</span>
+      </div>`).join('');
+
+    const isFu = (typeof q === 'object' && q !== null) && (q.is_followup === true || String(q.question_id || '').startsWith('FU'));
+    cards.insertAdjacentHTML('beforeend', `
+      <details class="bg-white rounded-2xl border border-slate-200 group" ${i === 0 ? 'open' : ''}>
+        <summary class="cursor-pointer p-5 flex items-start justify-between gap-3 list-none">
+          <div class="flex items-start gap-3 flex-1 min-w-0">
+            <span class="px-2 min-w-[2rem] h-8 rounded-full ${isFu ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-600'} flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">${qLabels[i]}</span>
+            <p class="font-semibold leading-snug break-words whitespace-pre-line">${escapeHtml(qText)}</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0 pt-1">
+            <span class="text-sm font-bold text-indigo-600">${score} / 80</span>
+            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+          ${qIntent ? `<p class="text-xs text-slate-500"><b>질문 의도:</b> ${escapeHtml(qIntent)}</p>` : ''}
+          <div>
+            <p class="text-xs text-slate-500 mb-1">내 답변</p>
+            <p class="text-sm bg-slate-50 rounded-lg p-3 leading-relaxed">${escapeHtml(a)}</p>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-slate-700">공통 기준 (HOW)</p>
+              <span class="text-xs font-bold text-indigo-600">${commonSub} / 50</span>
+            </div>
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">의도</span><br/><b>${cs.question_understanding ?? 0}/9</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구조</span><br/><b>${cs.answer_structure ?? 0}/9</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">관련성</span><br/><b>${cs.resume_job_relevance ?? 0}/13</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구체성</span><br/><b>${cs.specificity ?? 0}/9</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">논리</span><br/><b>${cs.logic ?? 0}/6</b></div>
+              <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">간결</span><br/><b>${cs.conciseness ?? 0}/4</b></div>
+            </div>
+          </div>
+          ${customRows ? `
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-slate-700">맞춤 기준 (WHAT)</p>
+              <span class="text-xs font-bold text-indigo-600">${customSub} / 30</span>
+            </div>
+            <div class="space-y-1">${customRows}</div>
+          </div>` : ''}
+          ${strengths ? `<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            <p class="text-xs font-semibold text-emerald-700 mb-1.5">강점</p>
+            <ul class="text-xs text-slate-700 space-y-1 list-disc list-inside">${strengths}</ul>
+          </div>` : ''}
+          ${improvements ? `<div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p class="text-xs font-semibold text-amber-700 mb-1.5">개선점</p>
+            <ul class="text-xs text-slate-700 space-y-1 list-disc list-inside">${improvements}</ul>
+          </div>` : ''}
+          ${ev.content_feedback ? `<p class="text-xs text-slate-600">${escapeHtml(ev.content_feedback)}</p>` : ''}
+          ${sample}
+          <div class="border-t border-slate-100 pt-3 flex items-center justify-between">
+            <p class="text-xs text-slate-400">이 질문은 도움이 되셨나요? <span class="text-slate-300">(선택)</span></p>
+            ${renderStarRating(i + 1, null)}
+          </div>
+        </div>
+      </details>
+    `);
+  });
+
+  // 다운로드 / 액션 링크
+  const publicCode = result.public_code || SID;
+  $('dlTxt').href     = `/api/interview/${encodeURIComponent(SID)}/download/report.txt`;
+  $('dlJson').href    = `/api/interview/${encodeURIComponent(SID)}/download/data.json`;
+  $('dlTxt').download = 'report.txt';
+  $('dlJson').download = 'data.json';
+  $('dlDetail').href   = `/session/${encodeURIComponent(publicCode)}`;
+  $('dlAnalysis').href = `/analysis/${encodeURIComponent(publicCode)}`;
+
+  // 영상 다운로드 버튼
+  const vbox = $('resultVideoDownloads');
+  vbox.innerHTML = '';
+  const uploaded = result.video_uploaded || [];
+  uploaded.forEach((ok, i) => {
+    if (!ok) return;
+    const btn = document.createElement('button');
+    btn.className = 'px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium video-dl-btn';
+    btn.dataset.qno = i + 1;
+    btn.dataset.code = publicCode;
+    btn.textContent = `${qLabels[i] || `Q${i + 1}`} 영상`;
+    vbox.appendChild(btn);
+  });
+}
+
+function renderNonverbalFeedback(result) {
+  const card = $('nonverbalCard');
+  const fb = result.nonverbal_feedback;
+  const metrics = result.nonverbal_metrics;
+  const details = $('nonverbalDetails');
+  if (!fb || !metrics || !metrics.ok) {
+    card.classList.add('hidden');
+    if (details) details.classList.add('hidden');
+    return;
+  }
+  if (details) {
+    details.classList.remove('hidden');
+    renderNonverbalDetails($('nonverbalDetailsBody'), metrics);
+  }
+  const s = metrics.scores_20 || {};
+  card.classList.remove('hidden');
+  // 3축 (표정 안정성 / 시선 안정성 / 자세 안정성) 으로 통합 표시.
+  // 옛 데이터(focus + blink 분리 저장) 호환: s.gaze 가 없으면 두 컴포넌트를 합산.
+  const gazeScore = (s.gaze?.score != null)
+    ? s.gaze.score
+    : Number(((s.focus?.score ?? 0) + (s.blink?.score ?? 0)).toFixed(2));
+  const gazeLabel = s.gaze?.label
+    || [s.focus?.label, s.blink?.label].filter(Boolean).join(' · ');
+  const gazeFb = fb.gaze
+    || [fb.focus, fb.blink].filter(Boolean).join(' ');
+
+  card.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold">비언어 분석 피드백</h3>
+      <span class="text-xs text-slate-400">GPT-4o mini · ${metrics.score_20.toFixed(2)} / 20</span>
+    </div>
+    <p class="text-sm text-slate-700 leading-relaxed mb-4">${escapeHtml(fb.summary || '')}</p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">표정 안정성 · ${s.smile?.score ?? '-'} / 6 — ${escapeHtml(s.smile?.label ?? '')}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(fb.smile || '')}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">시선 안정성 · ${gazeScore ?? '-'} / 10 — ${escapeHtml(gazeLabel)}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(gazeFb)}</p>
+      </div>
+      <div class="bg-slate-50 rounded-lg p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">자세 안정성 · ${s.posture?.score ?? '-'} / 4 — ${escapeHtml(s.posture?.label ?? '')}</p>
+        <p class="text-xs text-slate-700">${escapeHtml(fb.posture || '')}</p>
+      </div>
+    </div>`;
+}
+
+// 영상 다운로드 핸들러
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.video-dl-btn');
+  if (!btn) return;
+  const qNo = btn.dataset.qno;
+  const code = btn.dataset.code;
+  if (!qNo || !code) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '준비 중...';
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(code)}/video/${qNo}`);
+    if (!res.ok) throw new Error('영상을 불러올 수 없습니다.');
+    const data = await res.json();
+    const a = document.createElement('a');
+    a.href = data.url;
+    a.download = `answer_${qNo}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
+// ---------- 로드 ----------
+async function load() {
+  try {
+    const res = await fetch(`/api/interview/${encodeURIComponent(SID)}/result`, { credentials: 'same-origin' });
+    if (res.status === 401) { location.href = '/login'; return; }
+    if (res.status === 404) {
+      throw new Error('결과를 찾을 수 없어요. 서버가 재시작됐거나 이미 종료된 면접일 수 있어요.');
+    }
+    if (!res.ok) throw new Error('결과 조회 실패');
+    const result = await res.json();
+    $('loading').classList.add('hidden');
+    $('content').classList.remove('hidden');
+    renderResult(result);
+  } catch (e) {
+    $('loading').classList.add('hidden');
+    $('errorMsg').textContent = e.message;
+    $('errorBox').classList.remove('hidden');
+  }
+}
+load();
+</script>
+
+</body>
+</html>

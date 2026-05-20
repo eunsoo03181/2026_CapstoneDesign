@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>AI 모의 면접 — UI 시안</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  body { font-family: 'Pretendard Variable', system-ui, sans-serif; }
+  .pulse-record { animation: pulse 1.4s infinite ease-in-out; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    50%      { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
+  }
+  .score-bar { transition: width 0.6s ease; }
+</style>
+</head>
+
+<body class="bg-slate-50 text-slate-900">
+
+<!-- ===================== HEADER ===================== -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+      <h1 class="text-lg font-bold tracking-tight">Signal Catch <span class="text-slate-400 font-normal text-sm">AI 모의면접</span></h1>
+    </div>
+    <nav class="flex items-center gap-5 text-sm text-slate-600">
+      <a href="#" class="hover:text-slate-900">대시보드</a>
+      <a href="#" class="hover:text-slate-900">면접 기록</a>
+      <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-semibold">권</div>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-10 space-y-10">
+
+  <!-- ===================== 1. 면접 진행 중 화면 ===================== -->
+  <section>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-xs font-semibold text-indigo-600 tracking-wider">SECTION 1</span>
+      <span class="text-xs text-slate-400">면접 진행 중 화면</span>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-0">
+        <!-- 카메라 미리보기 -->
+        <div class="lg:col-span-1 bg-slate-900 aspect-video lg:aspect-auto flex items-center justify-center text-slate-500 relative">
+          <div class="absolute top-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur px-2 py-1 rounded text-xs text-white">
+            <span class="w-1.5 h-1.5 bg-red-500 rounded-full pulse-record"></span> LIVE
+          </div>
+          <div class="text-center">
+            <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <p class="text-sm">카메라 미리보기</p>
+            <p class="text-xs mt-1 opacity-50">표정 / 시선 / 자세 분석 중</p>
+          </div>
+          <!-- 비언어 실시간 인디케이터 -->
+          <div class="absolute bottom-3 left-3 right-3 bg-black/50 backdrop-blur rounded p-2 text-xs text-white space-y-1">
+            <div class="flex justify-between"><span>표정</span><span class="text-emerald-400">긍정적 ✓</span></div>
+            <div class="flex justify-between"><span>시선</span><span class="text-emerald-400">집중 ✓</span></div>
+            <div class="flex justify-between"><span>자세</span><span class="text-amber-400">다소 흔들림</span></div>
+          </div>
+        </div>
+
+        <!-- 질문 + 녹음 영역 -->
+        <div class="lg:col-span-2 p-8 flex flex-col gap-6">
+          <!-- 진행 표시 -->
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">질문 3 / 7</span>
+            <div class="flex gap-1">
+              <span class="w-6 h-1.5 rounded-full bg-indigo-600"></span>
+              <span class="w-6 h-1.5 rounded-full bg-indigo-600"></span>
+              <span class="w-6 h-1.5 rounded-full bg-indigo-600"></span>
+              <span class="w-6 h-1.5 rounded-full bg-slate-200"></span>
+              <span class="w-6 h-1.5 rounded-full bg-slate-200"></span>
+              <span class="w-6 h-1.5 rounded-full bg-slate-200"></span>
+              <span class="w-6 h-1.5 rounded-full bg-slate-200"></span>
+            </div>
+          </div>
+
+          <!-- 질문 -->
+          <div>
+            <p class="text-xs font-semibold text-indigo-600 mb-2">현재 질문</p>
+            <h2 class="text-2xl font-bold leading-snug">
+              Django 인턴 기간 동안 본인이 주도적으로 해결한 문제는 무엇이고,<br/>어떤 결과를 얻으셨나요?
+            </h2>
+          </div>
+
+          <!-- 녹음 버튼 + 상태 -->
+          <div class="flex items-center gap-6 mt-2">
+            <button id="recordBtn"
+                    class="w-20 h-20 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center pulse-record transition shrink-0"
+                    aria-label="녹음 토글">
+              <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </button>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-baseline justify-between mb-1">
+                <span class="text-sm font-semibold text-slate-700">녹음 중...</span>
+                <span class="text-xs text-slate-500">최대 180초</span>
+              </div>
+              <!-- 음성 파형 (장식) -->
+              <div class="h-12 bg-slate-100 rounded-lg flex items-center px-3 gap-0.5">
+                <div class="w-1 h-3 bg-red-300 rounded-full"></div>
+                <div class="w-1 h-6 bg-red-400 rounded-full"></div>
+                <div class="w-1 h-9 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-5 bg-red-400 rounded-full"></div>
+                <div class="w-1 h-8 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-4 bg-red-400 rounded-full"></div>
+                <div class="w-1 h-7 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-3 bg-red-300 rounded-full"></div>
+                <div class="w-1 h-9 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-5 bg-red-400 rounded-full"></div>
+                <div class="w-1 h-2 bg-red-300 rounded-full"></div>
+                <div class="w-1 h-7 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-4 bg-red-400 rounded-full"></div>
+                <div class="w-1 h-6 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-3 bg-red-300 rounded-full"></div>
+                <div class="w-1 h-8 bg-red-500 rounded-full"></div>
+                <div class="w-1 h-5 bg-red-400 rounded-full"></div>
+                <div class="w-1 h-2 bg-red-300 rounded-full"></div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2"><kbd class="px-1.5 py-0.5 bg-slate-200 rounded text-slate-700 font-mono text-[10px]">Enter</kbd> 를 눌러 답변 종료 / 자동으로 다음 질문</p>
+            </div>
+          </div>
+
+          <!-- 실시간 임시 자막 -->
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <p class="text-xs font-semibold text-slate-500 mb-2">실시간 변환 (임시)</p>
+            <p class="text-sm text-slate-700 leading-relaxed">제가 인턴 기간 동안 가장 주도적으로 해결했던 문제는 사용자 인증 API의 응답 속도가 평균 800ms 정도로 느리다는 점이었습니다. 원인을 분석해보니<span class="inline-block w-2 h-4 bg-slate-400 align-middle ml-1 animate-pulse"></span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 2. 종합 점수 ===================== -->
+  <section>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-xs font-semibold text-indigo-600 tracking-wider">SECTION 2</span>
+      <span class="text-xs text-slate-400">면접 종료 — 종합 점수</span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 큰 점수 카드 -->
+      <div class="lg:col-span-1 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white">
+        <p class="text-xs font-semibold opacity-80 mb-3">최종 종합 점수</p>
+        <div class="flex items-baseline gap-2 mb-6">
+          <span class="text-6xl font-black">73.5</span>
+          <span class="text-xl opacity-80">/ 100</span>
+        </div>
+        <div class="space-y-3 text-sm">
+          <div>
+            <div class="flex justify-between mb-1"><span>답변(내용)</span><span class="font-semibold">55.0 / 80</span></div>
+            <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+              <div class="score-bar bg-white h-full" style="width: 68.75%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between mb-1"><span>비언어</span><span class="font-semibold">18.5 / 20</span></div>
+            <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+              <div class="score-bar bg-white h-full" style="width: 92.5%"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 pt-6 border-t border-white/20 text-xs opacity-80">
+          <p>2026-05-10 14:32 진행</p>
+          <p>총 7문항 · 면접 시간 9분 12초</p>
+        </div>
+      </div>
+
+      <!-- 답변 평가 6항목 -->
+      <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
+        <h3 class="text-sm font-bold text-slate-700 mb-4">답변 내용 평가 (80점 만점)</h3>
+        <div class="space-y-3">
+          <div>
+            <div class="flex justify-between text-sm mb-1"><span>질문 의도 파악</span><span class="font-semibold">11 / 15</span></div>
+            <div class="bg-slate-100 rounded-full h-2"><div class="score-bar bg-indigo-500 h-full rounded-full" style="width: 73%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1"><span>답변 구조성</span><span class="font-semibold">10 / 15</span></div>
+            <div class="bg-slate-100 rounded-full h-2"><div class="score-bar bg-indigo-500 h-full rounded-full" style="width: 67%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1"><span>이력서/직무 관련성</span><span class="font-semibold">15 / 20</span></div>
+            <div class="bg-slate-100 rounded-full h-2"><div class="score-bar bg-indigo-500 h-full rounded-full" style="width: 75%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1"><span>경험의 구체성</span><span class="font-semibold">9 / 15</span></div>
+            <div class="bg-slate-100 rounded-full h-2"><div class="score-bar bg-amber-500 h-full rounded-full" style="width: 60%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1"><span>논리성과 설득력</span><span class="font-semibold">7 / 10</span></div>
+            <div class="bg-slate-100 rounded-full h-2"><div class="score-bar bg-indigo-500 h-full rounded-full" style="width: 70%"></div></div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1"><span>표현의 간결성</span><span class="font-semibold">3 / 5</span></div>
+            <div class="bg-slate-100 rounded-full h-2"><div class="score-bar bg-amber-500 h-full rounded-full" style="width: 60%"></div></div>
+          </div>
+        </div>
+
+        <hr class="my-5 border-slate-200" />
+
+        <h3 class="text-sm font-bold text-slate-700 mb-3">비언어 분석 (20점 만점)</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-xs text-slate-500 mb-1">표정</p>
+            <p class="font-bold">5.55<span class="text-xs text-slate-400">/6</span></p>
+            <p class="text-[10px] text-emerald-600 mt-1">긍정적 표정 충분</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-xs text-slate-500 mb-1">시선</p>
+            <p class="font-bold">5.60<span class="text-xs text-slate-400">/6</span></p>
+            <p class="text-[10px] text-emerald-600 mt-1">집중도 매우 높음</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-xs text-slate-500 mb-1">깜빡임</p>
+            <p class="font-bold">4.00<span class="text-xs text-slate-400">/4</span></p>
+            <p class="text-[10px] text-emerald-600 mt-1">안정</p>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <p class="text-xs text-slate-500 mb-1">자세</p>
+            <p class="font-bold">3.40<span class="text-xs text-slate-400">/4</span></p>
+            <p class="text-[10px] text-amber-600 mt-1">약간 흔들림</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3. 질문별 대화 + 평가 ===================== -->
+  <section>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-xs font-semibold text-indigo-600 tracking-wider">SECTION 3</span>
+      <span class="text-xs text-slate-400">질문별 답변 / 평가 / 모범 답안</span>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Q&A 카드 1 -->
+      <details class="bg-white rounded-2xl border border-slate-200 group" open>
+        <summary class="cursor-pointer p-5 flex items-center justify-between list-none">
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <span class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">Q1</span>
+            <p class="font-semibold truncate">간단한 자기소개 부탁드립니다.</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-sm font-bold text-indigo-600">62 / 80</span>
+            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </summary>
+        <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+          <!-- 사용자 답변 -->
+          <div class="flex gap-3">
+            <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold shrink-0">권</div>
+            <div class="flex-1">
+              <p class="text-xs text-slate-500 mb-1">내 답변 (1분 12초)</p>
+              <p class="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-lg p-3">
+                안녕하세요. 저는 OO대학교 전자공학과를 졸업한 권은수입니다. ABC 스타트업에서 백엔드 인턴으로 6개월간 근무하며 Python과 Django 기반의 API를 개발했고, 졸업작품으로는 OpenCV와 MediaPipe를 활용한 졸음 감지 시스템을 만들었습니다...
+              </p>
+            </div>
+          </div>
+
+          <!-- 평가 -->
+          <div class="flex gap-3">
+            <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">AI</div>
+            <div class="flex-1 space-y-3">
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">의도 파악</span><br/><b>13/15</b></div>
+                <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구조성</span><br/><b>11/15</b></div>
+                <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">관련성</span><br/><b>16/20</b></div>
+                <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구체성</span><br/><b>11/15</b></div>
+                <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">논리성</span><br/><b>8/10</b></div>
+                <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">간결성</span><br/><b>3/5</b></div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p class="text-xs font-semibold text-emerald-700 mb-1.5">강점</p>
+                  <ul class="text-xs text-slate-700 space-y-1 list-disc list-inside">
+                    <li>학력·경력·프로젝트가 명확히 정리됨</li>
+                    <li>핵심 기술 스택이 짧게 드러남</li>
+                  </ul>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p class="text-xs font-semibold text-amber-700 mb-1.5">개선점</p>
+                  <ul class="text-xs text-slate-700 space-y-1 list-disc list-inside">
+                    <li>지원 직무와 연결한 강점 한 줄 추가 권장</li>
+                    <li>1분 자기소개로는 다소 길어질 우려</li>
+                  </ul>
+                </div>
+              </div>
+
+              <details class="bg-indigo-50 border border-indigo-200 rounded-lg">
+                <summary class="cursor-pointer p-3 text-xs font-semibold text-indigo-700">모범 답변 예시 보기</summary>
+                <p class="px-3 pb-3 text-xs text-slate-700 leading-relaxed">
+                  안녕하세요. 백엔드 개발자 권은수입니다. ABC 스타트업 인턴 6개월 동안 사용자 인증 API의 응답 속도를 800ms에서 200ms로 개선한 경험이 있습니다. 특히 측정 → 병목 분석 → 캐싱 적용까지 끝까지 책임지고 진행했고, 이러한 문제 해결 경험이 귀사의 백엔드 직무에서도 가장 빠르게 기여할 수 있는 강점이라고 생각합니다.
+                </p>
+              </details>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Q&A 카드 2 (접힘) -->
+      <details class="bg-white rounded-2xl border border-slate-200 group">
+        <summary class="cursor-pointer p-5 flex items-center justify-between list-none">
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <span class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">Q2</span>
+            <p class="font-semibold truncate">Django 인턴 기간 동안 본인이 주도적으로 해결한 문제는 무엇이고, 어떤 결과를 얻으셨나요?</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-sm font-bold text-indigo-600">58 / 80</span>
+            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </summary>
+      </details>
+
+      <details class="bg-white rounded-2xl border border-slate-200 group">
+        <summary class="cursor-pointer p-5 flex items-center justify-between list-none">
+          <div class="flex items-center gap-3 flex-1 min-w-0">
+            <span class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">Q3</span>
+            <p class="font-semibold truncate">졸업작품인 졸음 감지 시스템에서 정확도를 높이기 위해 어떤 시도를 했나요?</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-sm font-bold text-emerald-600">71 / 80</span>
+            <svg class="w-5 h-5 text-slate-400 group-open:rotate-180 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </summary>
+      </details>
+    </div>
+  </section>
+
+  <!-- ===================== 4. 다운로드 / 공유 ===================== -->
+  <section>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-xs font-semibold text-indigo-600 tracking-wider">SECTION 4</span>
+      <span class="text-xs text-slate-400">결과 저장 및 공유</span>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h3 class="font-bold mb-1">면접 리포트 다운로드</h3>
+          <p class="text-sm text-slate-500">질문 / 답변 / 평가 / 모범답변 / 점수 모두 포함</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            TXT 다운로드
+          </a>
+          <a href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+            JSON 다운로드
+          </a>
+          <a href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-sm font-medium transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m4 0V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2z"/></svg>
+            PDF 리포트
+          </a>
+          <a href="#" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v6h6M20 20v-6h-6M4 20l16-16"/></svg>
+            다시 면접 보기
+          </a>
+        </div>
+      </div>
+
+      <!-- 음성 파일 목록 -->
+      <hr class="my-5 border-slate-200" />
+      <p class="text-xs font-semibold text-slate-500 mb-3">개별 답변 음성</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+        <a href="#" class="flex items-center justify-between bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded">
+          <span class="truncate">answer_1.wav</span><span class="text-slate-400">1:12</span>
+        </a>
+        <a href="#" class="flex items-center justify-between bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded">
+          <span class="truncate">answer_2.wav</span><span class="text-slate-400">1:48</span>
+        </a>
+        <a href="#" class="flex items-center justify-between bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded">
+          <span class="truncate">answer_3.wav</span><span class="text-slate-400">2:21</span>
+        </a>
+        <a href="#" class="flex items-center justify-between bg-slate-50 hover:bg-slate-100 px-3 py-2 rounded text-slate-400">
+          <span>+ 더 보기</span><span></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="text-center text-xs text-slate-400 py-6">
+    UI 시안 v0 · Signal Catch
+  </footer>
+</main>
+
+<script>
+  // 녹음 버튼 토글 (시안 데모용)
+  const btn = document.getElementById('recordBtn');
+  let recording = true;
+  btn.addEventListener('click', () => {
+    recording = !recording;
+    if (recording) {
+      btn.classList.add('bg-red-500','hover:bg-red-600','pulse-record');
+      btn.classList.remove('bg-slate-700','hover:bg-slate-800');
+      btn.innerHTML = '<svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+    } else {
+      btn.classList.remove('bg-red-500','hover:bg-red-600','pulse-record');
+      btn.classList.add('bg-slate-700','hover:bg-slate-800');
+      btn.innerHTML = '<svg class="w-9 h-9 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+    }
+  });
+</script>
+
+</body>
+</html>

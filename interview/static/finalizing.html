@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>Signal Catch — 답변 분석 중</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  body{font-family:'Pretendard Variable',system-ui,sans-serif}
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+  }
+  .shimmer {
+    background-image: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 40%, #cbd5e1 60%, #e2e8f0 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+  .step-dot.active { background:#4f46e5; color:white; }
+  .step-dot.done   { background:#10b981; color:white; }
+</style>
+<script src="/static/admin_chrome.js?v=board" defer></script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-3xl mx-auto px-6 py-4 flex items-center gap-2">
+    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+    <h1 class="text-lg font-bold tracking-tight">Signal Catch
+      <span class="text-slate-400 font-normal text-sm">답변을 분석하고 있어요</span>
+    </h1>
+  </div>
+</header>
+
+<main class="flex-1 flex items-center justify-center px-6 py-10">
+  <div class="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-sm p-10 space-y-8">
+
+    <!-- 상단: 인디케이터 -->
+    <div class="text-center">
+      <div class="inline-block relative">
+        <div class="w-20 h-20 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin"></div>
+      </div>
+      <h2 class="mt-6 text-2xl font-bold">답변을 분석하고 있어요</h2>
+      <p id="elapsed" class="mt-2 text-sm text-slate-500">예상 소요: 약 20초 ~ 1분</p>
+      <!-- 예상보다 오래 걸릴 때 양해 멘트 -->
+      <div id="apologyBox" class="hidden mt-4 inline-flex items-start gap-2 text-left bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-900 max-w-md">
+        <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p id="apologyMsg" class="leading-relaxed"></p>
+      </div>
+    </div>
+
+    <!-- 진행 단계 — JS 가 cam_mode 에 따라 라벨/항목 수 결정 -->
+    <div id="stepList" class="space-y-3"></div>
+
+    <!-- 진행 바 -->
+    <div>
+      <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+        <div id="progressBar" class="h-full bg-indigo-600 transition-all duration-500" style="width:5%"></div>
+      </div>
+      <p class="text-xs text-slate-400 mt-2 text-center" id="progressMsg">분석을 시작하고 있어요</p>
+    </div>
+
+    <!-- 오류 박스 -->
+    <div id="errorBox" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-5 text-sm text-rose-700 space-y-3">
+      <p class="font-semibold">분석 중 문제가 발생했어요.</p>
+      <p id="errorMsg" class="text-xs"></p>
+      <div class="flex items-center gap-2">
+        <button id="retryBtn" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold">다시 시도</button>
+        <a href="/history" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-semibold text-slate-700">면접 기록으로</a>
+      </div>
+    </div>
+
+    <p class="text-[11px] text-slate-400 text-center">
+      이 페이지를 닫지 마세요. 결과 페이지로 자동 이동합니다.
+    </p>
+  </div>
+</main>
+
+<script>
+const SID = decodeURIComponent(location.pathname.split('/').pop());
+const CAM = new URLSearchParams(location.search).get('cam') || 'realtime';
+const CAM_OFF = (CAM === 'off');
+const $ = (id) => document.getElementById(id);
+
+// 진행 단계 — cam_mode 에 따라 다른 항목 노출
+// 'off' 면 카메라/비언어 단계 자체를 보이지 않도록 함.
+const STEPS = CAM_OFF
+  ? [
+      { at: 10, step: 1, msg: '답변 내용을 채점하는 중' },
+      { at: 80, step: 2, msg: '결과를 정리하는 중' },
+    ]
+  : [
+      { at:  5, step: 1, msg: '카메라 분석 결과를 정리하는 중' },
+      { at: 25, step: 2, msg: '답변 내용을 채점하는 중' },
+      { at: 70, step: 3, msg: '비언어 피드백을 작성하는 중' },
+      { at: 90, step: 4, msg: '결과를 정리하는 중' },
+    ];
+
+// 동적으로 단계 행 렌더
+(function renderSteps() {
+  const box = $('stepList');
+  box.innerHTML = STEPS.map(s => `
+    <div class="step flex items-center gap-3" data-step="${s.step}">
+      <div class="step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border border-slate-200 bg-slate-100">${s.step}</div>
+      <p class="text-sm text-slate-500">${s.msg}</p>
+    </div>
+  `).join('');
+  // 첫 단계를 active
+  const first = box.querySelector('.step');
+  if (first) {
+    first.querySelector('.step-dot').classList.add('active');
+    first.querySelector('p').classList.remove('text-slate-500');
+    first.querySelector('p').classList.add('font-medium');
+  }
+})();
+
+let pct = 5;
+let timer = null;
+let startMs = Date.now();
+
+function markStep(n) {
+  document.querySelectorAll('.step').forEach((row) => {
+    const s = Number(row.dataset.step);
+    const dot = row.querySelector('.step-dot');
+    const lbl = row.querySelector('p');
+    dot.classList.remove('active', 'done');
+    if (s < n)  { dot.classList.add('done');  dot.textContent = '✓'; lbl.classList.remove('text-slate-500'); }
+    else if (s === n) { dot.classList.add('active'); lbl.classList.remove('text-slate-500'); lbl.classList.add('font-medium'); dot.textContent = s; }
+    else        { dot.textContent = s; lbl.classList.add('text-slate-500'); lbl.classList.remove('font-medium'); }
+  });
+}
+
+// 양해 멘트는 경과 시간이 임계값을 넘을 때마다 단계적으로 더 강해짐.
+// 점진적 안내 — 이미 더 상위 멘트가 노출돼 있으면 뒤로 후퇴하지 않음.
+const APOLOGY_STAGES = [
+  { atSec:  60, msg: '분석이 평소보다 조금 길어지고 있어요. 잠시만 더 기다려 주세요.' },
+  { atSec: 120, msg: '거의 다 됐어요. 답변을 더 꼼꼼히 검토하고 있으니 조금만 더 기다려 주세요.' },
+  { atSec: 180, msg: '예상보다 분석에 시간이 더 걸리고 있어요. 마무리 중이니 잠시만 더 기다려 주시면 감사하겠습니다.' },
+];
+let apologyStage = -1;   // 마지막으로 노출한 단계 인덱스
+
+function updateApology(elapsedSec) {
+  let target = -1;
+  for (let i = 0; i < APOLOGY_STAGES.length; i++) {
+    if (elapsedSec >= APOLOGY_STAGES[i].atSec) target = i;
+  }
+  if (target > apologyStage) {
+    apologyStage = target;
+    $('apologyMsg').textContent = APOLOGY_STAGES[target].msg;
+    $('apologyBox').classList.remove('hidden');
+  }
+}
+
+function tick() {
+  // 천천히 95까지만 채움 — 100은 finalize 응답 직후
+  pct = Math.min(pct + 1.5, 95);
+  $('progressBar').style.width = pct + '%';
+  const elapsedSec = Math.floor((Date.now() - startMs) / 1000);
+  $('elapsed').textContent = `경과 시간 ${elapsedSec}초 · 일반적으로 1분 이내에 끝나요`;
+
+  // 예상 시간 초과 시 양해 멘트 노출
+  updateApology(elapsedSec);
+
+  // step 자동 진행
+  let curStep = 1;
+  for (const s of STEPS) if (pct >= s.at) curStep = s.step;
+  markStep(curStep);
+  const msg = [...STEPS].reverse().find(s => pct >= s.at)?.msg;
+  if (msg) $('progressMsg').textContent = msg;
+}
+
+async function run() {
+  $('errorBox').classList.add('hidden');
+  $('apologyBox').classList.add('hidden');
+  apologyStage = -1;
+  pct = 5;
+  startMs = Date.now();
+  markStep(1);
+  if (timer) clearInterval(timer);
+  timer = setInterval(tick, 700);
+
+  try {
+    const res = await fetch(`/api/interview/${encodeURIComponent(SID)}/finalize`, {
+      method: 'POST',
+      credentials: 'same-origin',
+    });
+    if (res.status === 401) { location.href = '/login'; return; }
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      let detail = t;
+      try { detail = JSON.parse(t).detail || t; } catch {}
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    // 완료 → result 페이지로
+    clearInterval(timer);
+    pct = 100;
+    $('progressBar').style.width = '100%';
+    $('progressMsg').textContent = '완료! 결과 페이지로 이동합니다';
+    markStep(5); // 모두 done 처리
+    setTimeout(() => {
+      location.replace(`/result/${encodeURIComponent(SID)}`);
+    }, 400);
+  } catch (e) {
+    clearInterval(timer);
+    $('progressMsg').textContent = '문제가 발생했어요';
+    $('errorMsg').textContent = e.message;
+    $('errorBox').classList.remove('hidden');
+  }
+}
+
+$('retryBtn').addEventListener('click', run);
+run();
+</script>
+
+</body>
+</html>

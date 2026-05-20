@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>Signal Catch — 공유된 면접 결과</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>body{font-family:'Pretendard Variable',system-ui,sans-serif}</style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+      <h1 class="text-lg font-bold tracking-tight">Signal Catch
+        <span class="text-slate-400 font-normal text-sm">공유된 면접 결과</span>
+      </h1>
+    </a>
+    <a href="/" class="text-sm text-indigo-600 hover:text-indigo-700">내 면접 시작하기 →</a>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-10 space-y-6">
+
+  <div id="loading" class="text-center py-20 text-slate-400 text-sm">불러오는 중...</div>
+  <div id="errorBox" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-5 text-sm text-rose-700 text-center"></div>
+
+  <div id="content" class="hidden space-y-6">
+
+    <!-- 공유 안내 배너 -->
+    <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800">
+      <p class="font-semibold mb-1">🔗 공유된 결과</p>
+      <p id="shareNote" class="text-xs">이 페이지는 면접 응시자가 공유한 결과입니다.</p>
+    </div>
+
+    <!-- 헤더 -->
+    <div>
+      <h2 class="text-2xl font-bold">면접 결과 <span id="codeBadge" class="ml-2 text-sm font-mono text-slate-400"></span></h2>
+      <p id="dateInfo" class="text-sm text-slate-500 mt-1"></p>
+    </div>
+
+    <!-- 종합 점수 -->
+    <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white">
+      <p class="text-xs font-semibold opacity-80 mb-3">최종 종합 점수</p>
+      <div class="flex items-baseline gap-2 mb-6">
+        <span id="finalScore" class="text-6xl font-black">0.0</span>
+        <span id="finalMax" class="text-xl opacity-80">/ 100</span>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div>
+          <div class="flex justify-between mb-1"><span>답변(내용)</span><span id="contentScore" class="font-semibold">0/80</span></div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="contentBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="nonverbalRow">
+          <div class="flex justify-between mb-1"><span>비언어</span><span id="nonverbalScore" class="font-semibold">0/20</span></div>
+          <div class="bg-white/20 rounded-full h-2 overflow-hidden">
+            <div id="nonverbalBar" class="bg-white h-full transition-all duration-700" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 다운로드 (공유 옵션에 따라 표시) -->
+    <div id="downloadBox" class="hidden bg-white border border-slate-200 rounded-2xl p-5">
+      <h3 class="font-bold mb-3">다운로드</h3>
+      <div id="downloadButtons" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <!-- 질문별 카드 -->
+    <div id="qaCards" class="space-y-4"></div>
+
+    <!-- 이력서 본문 (공유 시에만) -->
+    <details id="resumeBox" class="hidden bg-white border border-slate-200 rounded-2xl">
+      <summary class="cursor-pointer p-5 font-semibold">이력서 본문 보기</summary>
+      <pre id="resumeText" class="px-5 pb-5 text-xs text-slate-700 whitespace-pre-wrap font-sans"></pre>
+    </details>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const publicCode = decodeURIComponent(location.pathname.split('/').pop());
+
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fmtDate(s){if(!s)return'-';const d=new Date(s);return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
+
+function computeQuestionLabels(questions) {
+  const labels = [];
+  let main = 0, fu = 0;
+  for (const q of (questions || [])) {
+    const id = String(q?.question_id_str || q?.question_id || '');
+    const isFu = id.startsWith('FU') || q?.is_followup === true;
+    if (isFu) { fu += 1; labels.push(main > 0 ? `Q${main}-${fu}` : `FU${fu}`); }
+    else      { main += 1; fu = 0; labels.push(`Q${main}`); }
+  }
+  return labels;
+}
+
+async function load() {
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(publicCode)}/public`);
+    if (res.status === 403) throw new Error('이 면접은 공개되지 않았습니다.');
+    if (res.status === 404) throw new Error('존재하지 않거나 삭제된 면접입니다.');
+    if (!res.ok) throw new Error('조회 실패');
+    const d = await res.json();
+    render(d);
+  } catch (e) {
+    $('loading').classList.add('hidden');
+    $('errorBox').textContent = e.message;
+    $('errorBox').classList.remove('hidden');
+  }
+}
+
+function render(d) {
+  $('loading').classList.add('hidden');
+  $('content').classList.remove('hidden');
+
+  // 공유 옵션 안내
+  const shared = [];
+  shared.push('Q&A 텍스트');
+  if (d.share_includes_audio) shared.push('음성 녹음');
+  if (d.share_includes_video) shared.push('영상 녹화');
+  if (d.share_includes_resume) shared.push('이력서');
+  $('shareNote').textContent = `공유된 항목: ${shared.join(', ')}`;
+
+  $('codeBadge').textContent = '#' + d.public_code;
+  $('dateInfo').textContent = fmtDate(d.completed_at || d.created_at);
+
+  const hasNv = !!(d.nonverbal_metrics && d.nonverbal_metrics.ok);
+  const content = d.content_score_80 ?? 0;
+  const nonverbal = d.nonverbal_score_20 ?? 0;
+  if (hasNv) {
+    $('finalScore').textContent = Number(d.final_score_100 ?? (content + nonverbal)).toFixed(1);
+    $('finalMax').textContent = '/ 100';
+    $('nonverbalScore').textContent = `${Number(nonverbal).toFixed(1)} / 20`;
+    $('nonverbalBar').style.width = (nonverbal/20*100) + '%';
+    $('nonverbalRow').classList.remove('hidden');
+  } else {
+    $('finalScore').textContent = Number(content).toFixed(1);
+    $('finalMax').textContent = '/ 80';
+    $('nonverbalRow').classList.add('hidden');
+  }
+  $('contentScore').textContent = `${Number(content).toFixed(1)} / 80`;
+  $('contentBar').style.width = (content/80*100) + '%';
+
+  // 다운로드 버튼 — 공유된 항목만
+  const dlButtons = [];
+  if (d.share_includes_resume) {
+    dlButtons.push(`<a href="/api/sessions/${encodeURIComponent(publicCode)}/resume" download="resume.txt"
+      class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium">이력서 다운로드</a>`);
+  }
+  if (dlButtons.length) {
+    $('downloadButtons').innerHTML = dlButtons.join('');
+    $('downloadBox').classList.remove('hidden');
+  }
+
+  // 이력서 본문 (공유 시에만)
+  if (d.share_includes_resume && d.resume?.content_text) {
+    $('resumeText').textContent = d.resume.content_text;
+    $('resumeBox').classList.remove('hidden');
+  }
+
+  // 질문 카드
+  const cards = $('qaCards');
+  cards.innerHTML = '';
+  const labels = computeQuestionLabels(d.questions);
+  d.questions.forEach((q, i) => {
+    const e = q.evaluation || {};
+    const cs = e.common_scores || {};
+    const audioPlayer = (d.share_includes_audio && q.has_audio)
+      ? `<audio controls preload="none" class="w-full mt-2"><source src="/api/sessions/${encodeURIComponent(publicCode)}/audio/${q.order_no}" /></audio>`
+      : '';
+    const isFu = String(q.question_id_str || '').startsWith('FU');
+
+    cards.insertAdjacentHTML('beforeend', `
+      <details class="bg-white rounded-2xl border border-slate-200 group" ${i === 0 ? 'open' : ''}>
+        <summary class="cursor-pointer p-5 flex items-start justify-between gap-3 list-none">
+          <div class="flex items-start gap-3 flex-1 min-w-0">
+            <span class="px-2 min-w-[2rem] h-8 rounded-full ${isFu ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-600'} flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">${labels[i]}</span>
+            <p class="font-semibold leading-snug break-words whitespace-pre-line">${escapeHtml(q.text)}</p>
+          </div>
+          <span class="text-sm font-bold text-indigo-600 shrink-0 pt-1">${e.content_score ?? '-'} / 80</span>
+        </summary>
+        <div class="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+          ${q.intent ? `<p class="text-xs text-slate-500"><b>질문 의도:</b> ${escapeHtml(q.intent)}</p>` : ''}
+          <div>
+            <p class="text-xs text-slate-500 mb-1">응시자 답변</p>
+            <p class="text-sm bg-slate-50 rounded-lg p-3 leading-relaxed">${escapeHtml(q.transcript)}</p>
+            ${audioPlayer}
+          </div>
+          ${e.content_score != null ? `
+          <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+            <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">의도</span><br/><b>${cs.question_understanding ?? 0}/9</b></div>
+            <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구조</span><br/><b>${cs.answer_structure ?? 0}/9</b></div>
+            <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">관련성</span><br/><b>${cs.resume_job_relevance ?? 0}/13</b></div>
+            <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">구체성</span><br/><b>${cs.specificity ?? 0}/9</b></div>
+            <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">논리</span><br/><b>${cs.logic ?? 0}/6</b></div>
+            <div class="bg-slate-50 rounded p-2"><span class="text-slate-500">간결</span><br/><b>${cs.conciseness ?? 0}/4</b></div>
+          </div>` : ''}
+          ${e.content_feedback ? `<p class="text-xs text-slate-600">${escapeHtml(e.content_feedback)}</p>` : ''}
+        </div>
+      </details>
+    `);
+  });
+}
+
+load();
+</script>
+
+</body>
+</html>

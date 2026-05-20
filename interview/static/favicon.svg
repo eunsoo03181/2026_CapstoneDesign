@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Signal Catch favicon — 작은 사이즈에서 보이도록 stroke 약간 굵게 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="7" fill="#eef2ff"/>
+  <path d="M 5 16 Q 16 2 27 16" stroke="#818cf8" stroke-width="2.4"
+        stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M 9 19 Q 16 10 23 19" stroke="#6366f1" stroke-width="2.6"
+        stroke-linecap="round" fill="none"/>
+  <circle cx="16" cy="22" r="3" fill="#4f46e5"/>
+</svg>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<title>Signal Catch — 관리자</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>body{font-family:'Pretendard Variable',system-ui,sans-serif}</style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+<!-- 임퍼소네이션 배너 (다른 사용자처럼 보고있을 때) -->
+<div id="impersonateBanner" class="hidden bg-amber-100 border-b border-amber-300 text-amber-900 text-sm">
+  <div class="max-w-6xl mx-auto px-6 py-2 flex items-center justify-between">
+    <span>👁️ 현재 <b id="impTargetName">-</b> 의 화면을 보는 중입니다.</span>
+    <button id="exitImpBtn" class="px-3 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold">관리자로 복귀</button>
+  </div>
+</div>
+
+<header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center" aria-label="Signal Catch"><svg viewBox="0 0 32 32" class="w-5 h-5" fill="none" aria-hidden="true"><path d="M 5 15 Q 16 0 27 15" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M 9 18 Q 16 9 23 18" stroke="rgba(255,255,255,0.9)" stroke-width="2.4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.6" fill="#ffffff"/></svg></div>
+      <h1 class="text-lg font-bold tracking-tight">Signal Catch
+        <span class="text-slate-400 font-normal text-sm">관리자</span>
+      </h1>
+    </a>
+    <nav class="flex items-center gap-5 text-sm">
+      <a href="/" class="text-slate-600 hover:text-slate-900">새 면접</a>
+      <a href="/history" class="text-slate-600 hover:text-slate-900">내 기록</a>
+      <a href="/board" class="text-slate-600 hover:text-slate-900">공유 게시판</a>
+      <a href="/admin" class="font-semibold text-rose-600">관리</a>
+      <button id="logoutBtn" class="text-slate-500 hover:text-rose-600 transition">로그아웃</button>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-10">
+
+  <!-- 통계 카드 -->
+  <section class="mb-10">
+    <h2 class="text-xl font-bold mb-4">전체 통계</h2>
+    <div id="statsGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <p class="text-xs text-slate-500">전체 사용자</p>
+        <p class="mt-1 text-2xl font-black" id="st-total-users">--</p>
+        <p class="text-[11px] text-slate-400 mt-0.5"><span id="st-active-users">--</span> 활성 · <span id="st-suspended">--</span> 정지</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <p class="text-xs text-slate-500">관리자 / 모더레이터</p>
+        <p class="mt-1 text-2xl font-black"><span id="st-admin">--</span> / <span id="st-mod">--</span></p>
+        <p class="text-[11px] text-slate-400 mt-0.5">권한 보유자</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <p class="text-xs text-slate-500">전체 면접 세션</p>
+        <p class="mt-1 text-2xl font-black" id="st-total-sessions">--</p>
+        <p class="text-[11px] text-slate-400 mt-0.5"><span id="st-active-sessions">--</span> 활성 · <span id="st-deleted">--</span> 삭제</p>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <p class="text-xs text-slate-500">평균 점수 (100점)</p>
+        <p class="mt-1 text-2xl font-black" id="st-avg-score">--</p>
+        <p class="text-[11px] text-slate-400 mt-0.5">공유 중 <span id="st-shared">--</span></p>
+      </div>
+    </div>
+
+    <!-- 모델별 사용률 -->
+    <div class="mt-4 bg-white border border-slate-200 rounded-2xl p-5">
+      <div class="flex items-baseline justify-between mb-3">
+        <p class="text-sm font-semibold">모델별 사용률</p>
+        <p class="text-[11px] text-slate-400">집계 대상 면접 <span id="st-models-total">--</span>회 (삭제 제외)</p>
+      </div>
+      <div id="st-models" class="space-y-2.5">
+        <p class="text-xs text-slate-400">불러오는 중...</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 사용자 목록 -->
+  <section>
+    <div class="flex items-end justify-between mb-4">
+      <h2 class="text-xl font-bold">사용자</h2>
+      <div class="flex items-center gap-2">
+        <input id="searchInput" type="search" placeholder="이메일 · 이름 · 사용자명 검색"
+               class="px-3 py-2 border border-slate-300 rounded-lg text-sm w-72 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+        <button id="reloadBtn" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm">새로고침</button>
+      </div>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-3 text-left sortable" data-sort="email">이메일</th>
+              <th class="px-4 py-3 text-left sortable" data-sort="name">이름</th>
+              <th class="px-4 py-3 text-left sortable" data-sort="username">사용자명</th>
+              <th class="px-4 py-3 text-left">로그인</th>
+              <th class="px-4 py-3 text-left sortable" data-sort="role">역할</th>
+              <th class="px-4 py-3 text-left sortable" data-sort="is_active">상태</th>
+              <th class="px-4 py-3 text-right sortable" data-sort="session_count">세션</th>
+              <th class="px-4 py-3 text-left sortable" data-sort="last_login_at">마지막 로그인</th>
+              <th class="px-4 py-3 text-left sortable" data-sort="created_at">가입</th>
+              <th class="px-4 py-3 text-right">관리</th>
+            </tr>
+          </thead>
+          <tbody id="userTbody" class="divide-y divide-slate-100">
+            <tr><td colspan="10" class="px-4 py-10 text-center text-slate-400 text-sm">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+let SORT = 'created_at';
+let ORDER = 'desc';
+let QUERY = '';
+let SEARCH_TIMER = null;
+
+// ---------- 공통 ----------
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fmt(d){
+  if(!d) return '-';
+  const x = new Date(d);
+  if (isNaN(x)) return '-';
+  return `${x.getFullYear()}.${String(x.getMonth()+1).padStart(2,'0')}.${String(x.getDate()).padStart(2,'0')}`;
+}
+
+async function api(url, opts={}) {
+  const res = await fetch(url, {credentials:'same-origin', ...opts});
+  if (res.status === 401) { location.href = '/login'; return; }
+  if (res.status === 403) { alert('관리자 권한이 필요합니다.'); location.href = '/'; return; }
+  if (!res.ok) {
+    const t = await res.text().catch(()=>'');
+    throw new Error(t || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ---------- 임퍼소네이션 배너 ----------
+let ME = null;
+async function checkMe() {
+  try {
+    const me = await api('/auth/me');
+    ME = me;
+    if (me?.impersonating && me?.admin) {
+      $('impTargetName').textContent = me.name || me.email;
+      $('impersonateBanner').classList.remove('hidden');
+    }
+  } catch(e) { /* ignore */ }
+}
+
+$('exitImpBtn')?.addEventListener('click', async () => {
+  try {
+    await api('/api/admin/impersonate/exit', {method:'POST'});
+    location.reload();
+  } catch(e) { alert(e.message); }
+});
+
+// ---------- 로그아웃 ----------
+$('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', {method:'POST'});
+  location.href = '/login';
+});
+
+// ---------- 통계 ----------
+async function loadStats() {
+  try {
+    const s = await api('/api/admin/stats');
+    $('st-total-users').textContent     = s.users.total;
+    $('st-active-users').textContent    = s.users.active;
+    $('st-suspended').textContent       = s.users.suspended;
+    $('st-admin').textContent           = s.users.admin;
+    $('st-mod').textContent             = s.users.moderator;
+    $('st-total-sessions').textContent  = s.sessions.total;
+    $('st-active-sessions').textContent = s.sessions.active;
+    $('st-deleted').textContent         = s.sessions.deleted;
+    $('st-shared').textContent          = s.sessions.shared;
+    $('st-avg-score').textContent       = s.sessions.avg_final_score_100 != null
+      ? s.sessions.avg_final_score_100.toFixed(1) : '--';
+
+    // 모델별 사용률
+    const m = s.models || { total_counted: 0, items: [] };
+    $('st-models-total').textContent = m.total_counted ?? 0;
+    const box = $('st-models');
+    if (!m.items.length) {
+      box.innerHTML = '<p class="text-xs text-slate-400">집계된 면접이 아직 없습니다.</p>';
+    } else {
+      // 모델별 색상 — 동일 모델이면 같은 색
+      const palette = {
+        'gpt-4o-mini': 'bg-emerald-500',
+        'gpt-4o':      'bg-indigo-500',
+        'gpt-5.4':     'bg-rose-500',
+        'gpt-5.5':     'bg-slate-900',
+        '미상':        'bg-slate-300',
+      };
+      box.innerHTML = m.items.map(item => {
+        const color = palette[item.model] || 'bg-slate-400';
+        return `
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-mono text-slate-700">${escapeHtml(item.model)}</span>
+              <span class="text-slate-500"><b class="text-slate-800">${item.count}</b>회 · ${item.percent.toFixed(1)}%</span>
+            </div>
+            <div class="bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div class="${color} h-full transition-all duration-500" style="width:${item.percent.toFixed(2)}%"></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+  } catch(e) {
+    console.error('stats', e);
+  }
+}
+
+// ---------- 사용자 목록 ----------
+function roleBadge(r) {
+  const cls = {
+    admin:     'bg-rose-100 text-rose-700',
+    moderator: 'bg-indigo-100 text-indigo-700',
+    user:      'bg-slate-100 text-slate-600',
+  }[r] || 'bg-slate-100 text-slate-600';
+  return `<span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold ${cls}">${escapeHtml(r)}</span>`;
+}
+
+function statusBadge(active, suspendedUntil) {
+  if (active) {
+    return '<span class="inline-flex px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[11px] font-semibold">활성</span>';
+  }
+  if (suspendedUntil) {
+    const until = fmt(suspendedUntil);
+    return `<span class="inline-flex px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[11px] font-semibold" title="${until} 까지">정지 · ${until}</span>`;
+  }
+  return '<span class="inline-flex px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[11px] font-semibold">영구 정지</span>';
+}
+
+function sortArrow(col) {
+  if (col !== SORT) return '<span class="text-slate-300 ml-1">↕</span>';
+  return ORDER === 'desc' ? '<span class="text-slate-700 ml-1">▼</span>' : '<span class="text-slate-700 ml-1">▲</span>';
+}
+
+function updateHeaderArrows() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const col = th.dataset.sort;
+    const label = th.textContent.replace(/[▲▼↕]/g,'').trim();
+    th.innerHTML = label + sortArrow(col);
+    th.classList.add('cursor-pointer','hover:bg-slate-100','transition');
+  });
+}
+
+async function loadUsers() {
+  updateHeaderArrows();
+  const tbody = $('userTbody');
+  tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-slate-400 text-sm">불러오는 중...</td></tr>';
+  const url = new URL('/api/admin/users', location.origin);
+  url.searchParams.set('sort', SORT);
+  url.searchParams.set('order', ORDER);
+  if (QUERY) url.searchParams.set('q', QUERY);
+  try {
+    const list = await api(url.pathname + url.search);
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-slate-400 text-sm">검색 결과가 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(u => `
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-3"><a class="text-indigo-600 hover:underline" href="/admin/users/${encodeURIComponent(u.id)}">${escapeHtml(u.email)}</a></td>
+        <td class="px-4 py-3">${escapeHtml(u.name || '-')}</td>
+        <td class="px-4 py-3 text-slate-500">${escapeHtml(u.username || '-')}</td>
+        <td class="px-4 py-3 text-xs text-slate-500">${escapeHtml(u.auth_provider)}</td>
+        <td class="px-4 py-3">${roleBadge(u.role)}</td>
+        <td class="px-4 py-3">${statusBadge(u.is_active, u.suspended_until)}</td>
+        <td class="px-4 py-3 text-right tabular-nums">${u.session_count}</td>
+        <td class="px-4 py-3 text-xs text-slate-500">${fmt(u.last_login_at)}</td>
+        <td class="px-4 py-3 text-xs text-slate-500">${fmt(u.created_at)}</td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <a href="/admin/users/${encodeURIComponent(u.id)}" class="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold">상세</a>
+          <button data-imp="${escapeHtml(u.id)}" data-name="${escapeHtml(u.name||u.email)}"
+                  class="ml-1 px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-semibold">입장</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="10" class="px-4 py-10 text-center text-rose-500 text-sm">오류: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+// 정렬 토글
+document.addEventListener('click', (e) => {
+  const th = e.target.closest('th.sortable');
+  if (th) {
+    const col = th.dataset.sort;
+    if (SORT === col) ORDER = (ORDER === 'desc' ? 'asc' : 'desc');
+    else { SORT = col; ORDER = (col === 'created_at' || col === 'last_login_at' || col === 'session_count') ? 'desc' : 'asc'; }
+    loadUsers();
+    return;
+  }
+  const imp = e.target.closest('button[data-imp]');
+  if (imp) {
+    const id = imp.dataset.imp, name = imp.dataset.name;
+    if (ME && id === ME.id) {
+      alert('자기 자신의 화면으로 입장할 수 없습니다.');
+      return;
+    }
+    if (!confirm(`${name} 으로 입장하시겠습니까?\n해당 사용자의 화면을 그대로 볼 수 있습니다.`)) return;
+    fetch(`/api/admin/impersonate/${encodeURIComponent(id)}`, {method:'POST'})
+      .then(r => r.ok ? location.href = '/' : r.text().then(t => Promise.reject(new Error(t))))
+      .catch(err => alert(err.message));
+  }
+});
+
+// 검색
+$('searchInput').addEventListener('input', (e) => {
+  clearTimeout(SEARCH_TIMER);
+  SEARCH_TIMER = setTimeout(() => {
+    QUERY = e.target.value.trim();
+    loadUsers();
+  }, 250);
+});
+
+$('reloadBtn').addEventListener('click', () => { loadStats(); loadUsers(); });
+
+// 초기
+checkMe();
+loadStats();
+loadUsers();
+</script>
+
+</body>
+</html>
