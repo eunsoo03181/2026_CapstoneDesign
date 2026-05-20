@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+*.pyo
+*.zip
+outputs*
+.DS_store
+# results*
