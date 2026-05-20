@@ -1,7 +1,308 @@
-__pycache__
-*.pyc
+# =============================================================================
+# Signal Catch .gitignore
+# 보안(PII·API 키)·OS·에디터·캐시·빌드·미디어 자산 모두 차단.
+#
+# 핵심 원칙
+#  - 사용자 답변/녹음/영상은 절대 커밋 금지 (사생활 보호)
+#  - API 키·DB 자격증명은 .env 만 사용, 절대 코드/문서에 평문 X
+#  - .env.example 만 추적 (실제 키 없는 템플릿)
+# =============================================================================
+
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 *.pyo
+*.pyd
+pip-log.txt
+pip-delete-this-directory.txt
+.python-version
+Pipfile.lock
+poetry.lock
+
+
+# ─── 가상환경 ─────────────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+.env.venv/
+__pypackages__/
+
+
+# ─── 빌드/배포 아티팩트 ──────────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+.eggs/
+*.spec
+*.manifest
+
+
+# ─── 비밀·환경변수·자격증명 (가장 중요) ─────────────────────────────────────
+# OPENAI_API_KEY, SUPABASE_*, SESSION_SECRET 등 — 절대 커밋 금지
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+
+# SSH/TLS 키
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+known_hosts
+
+# 클라우드 자격증명
+secrets/
+credentials.json
+service-account*.json
+gcp-key*.json
+aws-credentials
+.aws/
+.gcp/
+.azure/
+
+# 토큰·인증 캐시
+*.token
+.token
+auth_token*
+session_secret*
+
+
+# ─── 데이터베이스·덤프 ───────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.sql.gz
+*.sql.bz2
+*.dump
+mocktalk.db
+mocktalk_*.db
+signalcatch.db
+signalcatch_*.db
+*-backup.db
+*.bak.db
+
+
+# ─── 사용자 데이터·PII (절대 커밋 금지) ─────────────────────────────────────
+# 면접 진행 중 만들어진 녹음·평가 결과·업로드 — 모두 개인정보
+sessions/
+uploads/
+answer.wav
+answer_*.wav
+answer_*.webm
+answer_*.mp3
+answer_*.m4a
+
+# 이력서 — 실제 본인 PII 가 들어있을 수 있음
+# 데모/예시로 커밋하려면 파일명에 명시: `sample_resume.example.txt` 같은 식으로
+sample_resume.txt
+*_resume.txt
+!*.example.txt
+!*.example.md
+resumes/
+applicants/
+
+# 미디어 파일 일반 — 면접 녹음·영상 후보
+*.wav
+*.webm
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.opus
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# ML 모델 가중치 (큰 바이너리)
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.pkl
+*.bin
+*.safetensors
+*.onnx
+
+
+# ─── 압축 아카이브 (실수 커밋 방지) ─────────────────────────────────────────
 *.zip
-outputs*
-.DS_store
-# results*
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.7z
+*.rar
+docs.zip
+
+
+# ─── macOS ───────────────────────────────────────────────────────────────────
+# .DS_Store 가 폴더마다 자동 생성됨 — 절대 커밋되면 안 됨
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+Icon
+Icon?
+
+
+# ─── Windows ─────────────────────────────────────────────────────────────────
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+
+# ─── Linux ───────────────────────────────────────────────────────────────────
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+
+# ─── 에디터/IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+.fleet/
+.cursor/
+.zed/
+.history/
+.atom/
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.orig
+
+# JetBrains
+*.iml
+.idea_modules/
+out/
+
+# Vim
+.netrwhist
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-v][a-z]
+[._]sw[a-p]
+
+# Emacs
+\#*\#
+.\#*
+
+# LibreOffice/Office 임시
+.~lock.*#
+
+
+# ─── Claude Code / AI 에이전트 ──────────────────────────────────────────────
+# 로컬 에이전트 설정·세션 기록 (팀원과 공유 불필요)
+.claude/
+.claude-cache/
+.cursor-cache/
+CLAUDE.local.md
+.copilot-cache/
+
+
+# ─── 테스트·린트·타입체크 캐시 ───────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.dmypy.json
+dmypy.json
+
+
+# ─── 로그·디버그 ─────────────────────────────────────────────────────────────
+*.log
+logs/
+log/
+debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# ─── Jupyter ─────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+
+# ─── Node (현재 미사용이나 미래 대비) ──────────────────────────────────────
+node_modules/
+.npm/
+.yarn/
+.pnpm-store/
+
+
+# ─── 프로젝트 전용 무시 ─────────────────────────────────────────────────────
+# Supabase 로컬 토큰
+.supabase/
+
+# 데이터베이스 마이그레이션 로컬 스냅샷
+db_dump_*.sql
+local_seed.sql
+
+# 디버그용 임시 파일
+scratch/
+tmp/
+*.scratch.py
+*.todo.md
+test_output_*
+
+# 개인 메모 (CLAUDE.md 는 팀 공유, *.local.md 는 본인용)
+*.local.md
+NOTES.local
+TODO.local
+
+
+# =============================================================================
+# 이미 추적 중인 파일을 ignore 하려면 한 번 캐시에서 제거 후 커밋:
+#   git rm --cached <파일경로>
+#   git commit -m "stop tracking <파일>"
+# 예: git rm --cached sample_resume.txt mocktalk.db docs.zip
+# =============================================================================
