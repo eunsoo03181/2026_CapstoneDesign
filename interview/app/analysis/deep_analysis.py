@@ -16,6 +16,7 @@ import os
 from typing import List, Dict, Any, Optional
 
 from openai import OpenAI
+from app.scoring.openai_usage import record_completion_usage
 
 
 DEEP_MODEL_DEFAULT = "gpt-5.5"
@@ -138,6 +139,7 @@ def generate_deep_analysis(
             {"role": "user",   "content": user_block},
         ],
     )
+    record_completion_usage(completion, endpoint="deep_analysis", model=model)
     md = (completion.choices[0].message.content or "").strip()
 
     return {"markdown": md, "model": model}

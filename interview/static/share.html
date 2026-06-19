@@ -133,18 +133,20 @@ function render(d) {
   $('codeBadge').textContent = '#' + d.public_code;
   $('dateInfo').textContent = fmtDate(d.completed_at || d.created_at);
 
+  // 모든 점수는 100점 만점 환산값. 옛 세션 fallback: final_score_100 없으면 ×1.25 환산
   const hasNv = !!(d.nonverbal_metrics && d.nonverbal_metrics.ok);
   const content = d.content_score_80 ?? 0;
   const nonverbal = d.nonverbal_score_20 ?? 0;
+  const scaled100 = d.final_score_100 != null
+    ? d.final_score_100
+    : (hasNv ? (content + nonverbal) : content * 1.25);
+  $('finalScore').textContent = Number(scaled100).toFixed(1);
+  $('finalMax').textContent = '/ 100';
   if (hasNv) {
-    $('finalScore').textContent = Number(d.final_score_100 ?? (content + nonverbal)).toFixed(1);
-    $('finalMax').textContent = '/ 100';
     $('nonverbalScore').textContent = `${Number(nonverbal).toFixed(1)} / 20`;
     $('nonverbalBar').style.width = (nonverbal/20*100) + '%';
     $('nonverbalRow').classList.remove('hidden');
   } else {
-    $('finalScore').textContent = Number(content).toFixed(1);
-    $('finalMax').textContent = '/ 80';
     $('nonverbalRow').classList.add('hidden');
   }
   $('contentScore').textContent = `${Number(content).toFixed(1)} / 80`;

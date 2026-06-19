@@ -20,6 +20,7 @@ import json
 from typing import List, Dict, Optional, Tuple, Union
 
 from openai import OpenAI
+from app.scoring.openai_usage import record_completion_usage
 
 
 # ---------- 점수 상한 ----------
@@ -35,6 +36,31 @@ COMMON_MAX = sum(COMMON_CRITERIA_MAX.values())   # 50
 CUSTOM_MAX = 30
 TOTAL_MAX = COMMON_MAX + CUSTOM_MAX               # 80
 CUSTOM_POINT_MAX = 5                              # eval_point 1개 만점
+
+# 빈/환각 답변 placeholder — LLM 호출 없이 0점 처리
+EMPTY_ANSWER_TEXT = "(내용 없음)"
+
+
+def _is_empty_answer(text: str) -> bool:
+    """답변이 비었거나 (내용 없음) placeholder 만 있으면 True."""
+    s = (text or "").strip()
+    return (not s) or (s == EMPTY_ANSWER_TEXT)
+
+
+def _zero_score_result(question_id: str, eval_points: List[str]) -> Dict:
+    """빈 답변에 대한 0점 응답 — LLM 호출 없음."""
+    return {
+        "question_id":     question_id,
+        "common_scores":   {k: 0 for k in COMMON_CRITERIA_MAX},
+        "common_subtotal": 0,
+        "custom_scores":   [{"point": p, "score": 0} for p in eval_points],
+        "custom_subtotal": 0,
+        "content_score":   0,
+        "strengths":       [],
+        "improvements":    ["답변이 제출되지 않았습니다 — 다음 면접에선 어떤 답이라도 시도해보세요."],
+        "content_feedback": "답변이 비어 있어 평가할 수 없습니다. (0점 처리)",
+        "sample_answer":   "",
+    }
 
 
 # ---------- 시스템 프롬프트 ----------
@@ -181,6 +207,11 @@ def evaluate_answer(
 ) -> Dict:
     """단일 (질문, 답변) 평가."""
     eval_points = list(evaluation_points or [])
+
+    # 빈/환각 답변 short-circuit — LLM 호출 없이 0점 처리 (토큰 절약 + 일관성)
+    if _is_empty_answer(transcript):
+        return _zero_score_result(question_id, eval_points)
+
     client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
 
     user_msg = _build_user_message(
@@ -201,6 +232,7 @@ def evaluate_answer(
         response_format={"type": "json_object"},
         temperature=0.2,
     )
+    record_completion_usage(res, endpoint="answer_evaluator", model=model)
     raw = res.choices[0].message.content
     data = json.loads(raw)
     return _validate_and_fix(data, question_id, eval_points)

@@ -11,6 +11,9 @@ from .models import (
     Evaluation,
     VideoClip,
     NonverbalMetrics,
+    TokenUsage,
+    CreditTransaction,
+    EmailVerificationToken,
 )
 from .utils import gen_uuid, gen_public_code, gen_share_token
 
@@ -18,6 +21,7 @@ __all__ = [
     "engine", "SessionLocal", "get_db", "init_db",
     "Base", "User", "Resume",
     "InterviewSession", "Question", "Answer",
-    "Evaluation", "VideoClip", "NonverbalMetrics",
+    "Evaluation", "VideoClip", "NonverbalMetrics", "TokenUsage", "CreditTransaction",
+    "EmailVerificationToken",
     "gen_uuid", "gen_public_code", "gen_share_token",
 ]

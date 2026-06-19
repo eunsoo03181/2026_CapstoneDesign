@@ -109,6 +109,49 @@
       </div>
     </section>
 
+    <!-- ============ Credit 관리 ============ -->
+    <section class="bg-white border border-slate-200 rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 class="text-lg font-bold">Credit 잔액 · 사용 내역</h3>
+        <div class="flex items-center gap-2">
+          <span id="creditBalance" class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full font-bold tabular-nums">– credits</span>
+          <span id="creditUnlimitedBadge" class="hidden px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-bold">admin · 무제한</span>
+        </div>
+      </div>
+
+      <!-- 조정 폼 -->
+      <div class="grid grid-cols-1 sm:grid-cols-[120px_1fr_auto] gap-2 mb-4">
+        <input id="creditDelta" type="number" placeholder="+10 또는 -5"
+               class="px-3 py-2 border border-slate-300 rounded-lg text-sm tabular-nums" />
+        <input id="creditReason" type="text" placeholder="사유 (예: 이벤트 지급, 환불)"
+               maxlength="120"
+               class="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+        <button id="creditAdjustBtn"
+                class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition">
+          적용
+        </button>
+      </div>
+      <p id="creditMsg" class="text-xs hidden mb-3"></p>
+
+      <!-- 최근 내역 -->
+      <div class="overflow-x-auto border border-slate-200 rounded-lg">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="px-3 py-2 text-left">시각</th>
+              <th class="px-3 py-2 text-right">변동</th>
+              <th class="px-3 py-2 text-right">잔액</th>
+              <th class="px-3 py-2 text-left">사유</th>
+              <th class="px-3 py-2 text-left">면접 코드</th>
+            </tr>
+          </thead>
+          <tbody id="creditTxBody" class="divide-y divide-slate-100">
+            <tr><td colspan="5" class="px-3 py-6 text-center text-slate-400">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- 세션 목록 -->
     <section>
       <div class="flex items-end justify-between mb-3">
@@ -566,9 +609,88 @@ $('includeDeleted').addEventListener('change', (e) => {
   loadSessions();
 });
 
+// ===================== Credit 잔액·내역 =====================
+function fmtDt(s) {
+  if (!s) return '-';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ` +
+         `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+async function loadCredits() {
+  try {
+    const data = await api(`/api/admin/users/${encodeURIComponent(USER_ID)}/credits?limit=100`);
+    $('creditBalance').textContent = `${data.balance} credits`;
+    $('creditUnlimitedBadge').classList.toggle('hidden', !data.unlimited);
+    const tbody = $('creditTxBody');
+    const txs = data.transactions || [];
+    if (!txs.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-slate-400">내역이 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = txs.map(t => {
+      const d = t.delta || 0;
+      const cls = d > 0 ? 'text-emerald-600 font-semibold'
+                : d < 0 ? 'text-rose-600 font-semibold'
+                : 'text-slate-400';
+      const sign = d > 0 ? '+' : '';
+      const code = t.related_session_code
+        ? `<a href="/session/${encodeURIComponent(t.related_session_code)}" class="text-indigo-600 font-mono text-xs hover:underline">${t.related_session_code}</a>`
+        : '<span class="text-slate-300">-</span>';
+      return `
+        <tr>
+          <td class="px-3 py-2 text-xs text-slate-500">${fmtDt(t.created_at)}</td>
+          <td class="px-3 py-2 text-right tabular-nums ${cls}">${sign}${d}</td>
+          <td class="px-3 py-2 text-right tabular-nums text-slate-700">${t.balance_after}</td>
+          <td class="px-3 py-2 text-slate-700">${(t.reason || '').replace(/</g,'&lt;')}</td>
+          <td class="px-3 py-2">${code}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    $('creditTxBody').innerHTML =
+      `<tr><td colspan="5" class="px-3 py-6 text-center text-rose-600">${e.message || e}</td></tr>`;
+  }
+}
+
+$('creditAdjustBtn')?.addEventListener('click', async () => {
+  const deltaRaw = $('creditDelta').value.trim();
+  const delta = parseInt(deltaRaw, 10);
+  if (!Number.isFinite(delta) || delta === 0) {
+    showCreditMsg('0 이 아닌 정수 (+ 또는 -) 를 입력하세요.', 'err');
+    return;
+  }
+  const reason = $('creditReason').value.trim() || 'admin_adjust';
+  $('creditAdjustBtn').disabled = true;
+  try {
+    const r = await api(`/api/admin/users/${encodeURIComponent(USER_ID)}/credits`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({delta, reason}),
+    });
+    showCreditMsg(`적용됨: ${r.previous_balance} → ${r.new_balance} (Δ ${r.delta_applied})`, 'ok');
+    $('creditDelta').value = '';
+    $('creditReason').value = '';
+    loadCredits();
+  } catch (e) {
+    showCreditMsg(e.message || String(e), 'err');
+  } finally {
+    $('creditAdjustBtn').disabled = false;
+  }
+});
+
+function showCreditMsg(msg, kind) {
+  const el = $('creditMsg');
+  el.textContent = msg;
+  el.className = 'text-xs mb-3 ' + (kind === 'ok' ? 'text-emerald-600' : 'text-rose-600');
+  el.classList.remove('hidden');
+  clearTimeout(showCreditMsg._t);
+  showCreditMsg._t = setTimeout(() => el.classList.add('hidden'), 5000);
+}
+
 // 초기
 loadUser();
 loadSessions();
+loadCredits();
 </script>
 
 </body>

@@ -19,8 +19,9 @@ import json
 from typing import Optional, List, Dict, Any
 
 from openai import AsyncOpenAI
+from app.scoring.openai_usage import record_completion_usage
 
-from company_research_prompts import (
+from app.company.company_research_prompts import (
     COMPANY_JOB_SUMMARY_FROM_TEXT_PROMPT,
     COMPANY_JOB_BASED_QUESTION_PROMPT,
     COMPANY_JOB_RESEARCH_VALIDATION_PROMPT,
@@ -80,6 +81,7 @@ async def summarize_company_job_from_text_async(
             temperature=0.3,
             max_completion_tokens=2000 if _is_advanced(model) else 1400,
         )
+        record_completion_usage(resp, endpoint='company_research', model=model)
         raw = resp.choices[0].message.content or "{}"
         data = json.loads(raw) or {}
     except Exception:
@@ -148,6 +150,7 @@ async def research_company_from_name_async(
             temperature=0.3,
             max_completion_tokens=2000 if _is_advanced(model) else 1400,
         )
+        record_completion_usage(resp, endpoint='company_research', model=model)
         raw = resp.choices[0].message.content or "{}"
         data = json.loads(raw) or {}
     except Exception:
@@ -295,6 +298,7 @@ async def generate_company_questions_async(
             temperature=0.5,
             max_completion_tokens=1500 if _is_advanced(model) else 900,
         )
+        record_completion_usage(resp, endpoint='company_research', model=model)
         data = json.loads(resp.choices[0].message.content or "{}")
     except Exception:
         return []

@@ -9,7 +9,7 @@
 <link rel="stylesheet" as="style" crossorigin
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
 <style>body{font-family:'Pretendard Variable',system-ui,sans-serif}</style>
-<script src="/static/admin_chrome.js?v=board" defer></script>
+<script src="/static/admin_chrome.js?v=credit-tip" defer></script>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
@@ -99,6 +99,9 @@
     <!-- 답변 일관성 검증 카드 -->
     <div id="consistencyCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
 
+    <!-- 회사·직무 리서치 카드 (회사 검색이 실제로 작동했는지 확인용) -->
+    <div id="companyResearchCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
+
     <!-- 질문별 평가 카드 -->
     <div id="qaCards" class="space-y-4"></div>
 
@@ -121,8 +124,8 @@
 </main>
 
 <script type="module">
-import { renderNonverbalDetails } from '/static/nonverbal_charts.js?v=20260515';
-import { renderVoiceCard, renderConsistencyCard } from '/static/nonverbal_extras.js?v=20260516';
+import { renderNonverbalDetails } from '/static/nonverbal_charts.js?v=20260527';
+import { renderVoiceCard, renderConsistencyCard, renderCompanyResearchCard } from '/static/nonverbal_extras.js?v=20260516b';
 
 const SID = decodeURIComponent(location.pathname.split('/').pop());
 const $ = (id) => document.getElementById(id);
@@ -195,33 +198,55 @@ function renderResult(result) {
     $('modelChip').classList.remove('hidden');
   }
 
-  // 시각/음성 분리 표시 — 둘 다 없으면 100점 환산 의미 없으므로 80점 만점 모드
+  // 시각/음성 분리 표시. 점수는 항상 /100 만점 비례 환산 (final_score_100).
   const visualAvail = !!final.visual_available;
   const voiceAvail  = !!final.voice_available;
-  const anyNonverbal = visualAvail || voiceAvail;
 
   $('contentScore').textContent = `${(final.content_score_80 ?? 0).toFixed(1)} / 80`;
   $('contentBar').style.width = ((final.content_score_80 ?? 0) / 80 * 100) + '%';
 
-  if (!anyNonverbal) {
-    $('finalScore').textContent = (final.content_score_80 ?? 0).toFixed(1);
-    $('finalMax').textContent = '/ 80';
-    $('nvRow').style.display = 'none';
-    const voiceRow = $('voiceRow'); if (voiceRow) voiceRow.style.display = 'none';
+  // 종합 점수 — 항상 100점 만점 환산
+  $('finalScore').textContent = (final.final_score_100 ?? 0).toFixed(1);
+  $('finalMax').textContent = '/ 100';
+
+  // 비언어 행 — 가용 항목만 표시 + max 동적 (10 또는 20).
+  // 한 축만 살아있으면 그 축이 만점 20 흡수 (서버에서 visual_max/voice_max 로 전달).
+  const v10    = final.visual_score_10 ?? 0;
+  const vo10   = final.voice_score_10  ?? 0;
+  const vMax   = final.visual_max ?? (visualAvail ? 10 : 0);
+  const voMax  = final.voice_max  ?? (voiceAvail  ? 10 : 0);
+  if (visualAvail && vMax > 0) {
+    $('visualScore').textContent = `${v10.toFixed(1)} / ${vMax.toFixed(0)}`;
+    $('visualBar').style.width = (v10 / vMax * 100) + '%';
   } else {
-    $('finalScore').textContent = (final.final_score_100 ?? 0).toFixed(1);
-    $('finalMax').textContent = '/ 100';
-    const v10 = final.visual_score_10 ?? 0;
-    const vo10 = final.voice_score_10 ?? 0;
-    $('visualScore').textContent = visualAvail ? `${v10.toFixed(1)} / 10` : '미수집 / 10';
-    $('visualBar').style.width = (v10 / 10 * 100) + '%';
-    $('voiceScore').textContent  = voiceAvail  ? `${vo10.toFixed(1)} / 10` : '미수집 / 10';
-    $('voiceBar').style.width = (vo10 / 10 * 100) + '%';
+    $('nvRow').style.display = 'none';
+  }
+  if (voiceAvail && voMax > 0) {
+    $('voiceScore').textContent = `${vo10.toFixed(1)} / ${voMax.toFixed(0)}`;
+    $('voiceBar').style.width = (vo10 / voMax * 100) + '%';
+  } else {
+    const voiceRow = $('voiceRow'); if (voiceRow) voiceRow.style.display = 'none';
+  }
+
+  // 환산 안내 (raw_max < 100 인 경우만) — 케이스별 분기로 명확히
+  if (final.is_scaled) {
+    const missing = [];
+    if (!visualAvail) missing.push('카메라 OFF로 <b>시각 비언어</b>');
+    if (!voiceAvail)  missing.push('텍스트 답변으로 <b>음성 비언어</b>');
+    const reason = missing.join(' + ') + ' 평가가 빠졌어요';
+    const note = document.createElement('p');
+    note.className = 'text-[11px] opacity-80 mt-2 leading-relaxed';
+    note.innerHTML =
+      `※ ${reason}. 100점 비교를 위해 원본 만점 <b>${final.raw_max_total.toFixed(0)}점</b> 을 ` +
+      `<b>×${final.scale_factor.toFixed(2)}</b> 환산했어요 ` +
+      `(${final.raw_total.toFixed(1)} / ${final.raw_max_total.toFixed(0)} → ${final.final_score_100.toFixed(1)} / 100).`;
+    $('finalScore').parentElement.parentElement.appendChild(note);
   }
 
   renderNonverbalFeedback(result);
   renderVoiceCard($('voiceCard'), result.voice_eval, result.voice_per_question);
   renderConsistencyCard($('consistencyCard'), result.consistency_checks, qaPairs);
+  renderCompanyResearchCard($('companyResearchCard'), result.company_research);
 
   // 질문 카드
   const cards = $('qaCards');
@@ -346,13 +371,15 @@ function renderNonverbalFeedback(result) {
   }
   if (details) {
     details.classList.remove('hidden');
-    renderNonverbalDetails($('nonverbalDetailsBody'), metrics);
+    renderNonverbalDetails($('nonverbalDetailsBody'), metrics, {
+      voiceAvailable: !!(result.voice_eval && result.voice_eval.ok),
+    });
   }
   const s = metrics.scores_20 || {};
   card.classList.remove('hidden');
   // 3축 (표정 안정성 / 시선 안정성 / 자세 안정성) 으로 통합 표시.
   // 옛 데이터(focus + blink 분리 저장) 호환: s.gaze 가 없으면 두 컴포넌트를 합산.
-  const gazeScore = (s.gaze?.score != null)
+  const gazeScoreRaw = (s.gaze?.score != null)
     ? s.gaze.score
     : Number(((s.focus?.score ?? 0) + (s.blink?.score ?? 0)).toFixed(2));
   const gazeLabel = s.gaze?.label
@@ -360,23 +387,33 @@ function renderNonverbalFeedback(result) {
   const gazeFb = fb.gaze
     || [fb.focus, fb.blink].filter(Boolean).join(' ');
 
+  // 음성 비언어가 같이 있으면 얼굴 비언어 총점은 10 (음성 10 + 얼굴 10).
+  // 컴포넌트 만점도 절반(6→3, 10→5, 4→2)으로 비례 축소. 음성 없으면 원래대로.
+  const hasVoice = !!(result.voice_eval && result.voice_eval.ok);
+  const k = hasVoice ? 0.5 : 1.0;
+  const smileScoreRaw   = s.smile?.score   ?? 0;
+  const postureScoreRaw = s.posture?.score ?? 0;
+  const smileMax   = 6 * k,  gazeMax = 10 * k,  postureMax = 4 * k;
+  const totalMax   = (smileMax + gazeMax + postureMax).toFixed(0);   // 20 또는 10
+  const totalScore = (Number(metrics.score_20 || 0) * k).toFixed(2);
+
   card.innerHTML = `
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-bold">비언어 분석 피드백</h3>
-      <span class="text-xs text-slate-400">GPT-4o mini · ${metrics.score_20.toFixed(2)} / 20</span>
+      <span class="text-xs text-slate-400">GPT-4o mini · ${totalScore} / ${totalMax}${hasVoice ? ' · 음성과 분담' : ''}</span>
     </div>
     <p class="text-sm text-slate-700 leading-relaxed mb-4">${escapeHtml(fb.summary || '')}</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs font-semibold text-slate-500 mb-1">표정 안정성 · ${s.smile?.score ?? '-'} / 6 — ${escapeHtml(s.smile?.label ?? '')}</p>
+        <p class="text-xs font-semibold text-slate-500 mb-1">표정 안정성 · ${(smileScoreRaw * k).toFixed(2)} / ${smileMax.toFixed(0)} — ${escapeHtml(s.smile?.label ?? '')}</p>
         <p class="text-xs text-slate-700">${escapeHtml(fb.smile || '')}</p>
       </div>
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs font-semibold text-slate-500 mb-1">시선 안정성 · ${gazeScore ?? '-'} / 10 — ${escapeHtml(gazeLabel)}</p>
+        <p class="text-xs font-semibold text-slate-500 mb-1">시선 안정성 · ${(Number(gazeScoreRaw) * k).toFixed(2)} / ${gazeMax.toFixed(0)} — ${escapeHtml(gazeLabel)}</p>
         <p class="text-xs text-slate-700">${escapeHtml(gazeFb)}</p>
       </div>
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs font-semibold text-slate-500 mb-1">자세 안정성 · ${s.posture?.score ?? '-'} / 4 — ${escapeHtml(s.posture?.label ?? '')}</p>
+        <p class="text-xs font-semibold text-slate-500 mb-1">자세 안정성 · ${(postureScoreRaw * k).toFixed(2)} / ${postureMax.toFixed(0)} — ${escapeHtml(s.posture?.label ?? '')}</p>
         <p class="text-xs text-slate-700">${escapeHtml(fb.posture || '')}</p>
       </div>
     </div>`;

@@ -56,7 +56,7 @@ class User(Base):
     # 계정 메타
     auth_provider: Mapped[str] = mapped_column(
         String(20), default="local", index=True,
-    )  # 'local' | 'google' | 'kakao'
+    )  # 'local' | 'google'
     role: Mapped[str] = mapped_column(
         String(20), default="user", index=True,
     )  # 'user' | 'moderator' | 'admin'
@@ -64,6 +64,18 @@ class User(Base):
     # 정지 만료 시각 — null 이면 영구 정지 (단, is_active=False 일 때만 의미).
     # 미래 시각이면 그때까지 정지, 과거 시각이면 자동 해제 (deps 에서 처리).
     suspended_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    # 이메일 인증 여부.
+    #  - 로컬 회원가입: 가입 직후 False, 인증 메일 링크 클릭 시 True
+    #  - Google OAuth 가입: 항상 True (Google 이 이미 검증)
+    # False 면 면접 시작 차단 (start-stream 에서 막힘).
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0",
+    )
+
+    # 면접 1회 생성에 1 credit 소모. admin/moderator 는 차감 없음.
+    # 신규 가입자는 0 — 관리자가 수동 부여해야 면접 시작 가능.
+    credits: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at:    Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -337,3 +349,103 @@ class NonverbalMetrics(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     session: Mapped[InterviewSession] = relationship(back_populates="nonverbal_metrics")
+
+
+# ====================================================================
+# 9. TokenUsage — OpenAI/Whisper 호출별 토큰·비용 적재
+# ====================================================================
+class TokenUsage(Base):
+    """매 LLM 호출 (chat completions) + Whisper STT 호출마다 1 row.
+
+    user_id / session_id 는 NULL 허용 — 백그라운드 / 익명 호출 흔적도 남도록.
+    cost_usd 는 호출 시점 단가표 기준 추정값 (스냅샷). 단가 변동 후엔 재계산 X.
+    """
+    __tablename__ = "token_usage"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_uuid)
+
+    user_id:    Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    # InterviewSession.public_code (브라우저용 식별자) — 옵션
+    session_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+
+    endpoint: Mapped[str] = mapped_column(String(64), index=True)
+    # 예: "question_generator", "answer_evaluator", "followup_generator",
+    #     "pressure_generator", "consistency_checker", "nonverbal_feedback",
+    #     "company_research", "deep_analysis", "whisper_stt"
+
+    model: Mapped[str] = mapped_column(String(64), index=True)
+    # OpenAI 모델 이름 (gpt-4o-mini, gpt-5-mini, whisper-1, ...)
+
+    prompt_tokens:     Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens:      Mapped[int] = mapped_column(Integer, default=0)
+
+    # Whisper 는 토큰 대신 duration(초) — 별도 컬럼
+    audio_seconds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # 추정 비용 (USD, 호출 시점 단가 스냅샷)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+# ====================================================================
+# 10. CreditTransaction — credit 변동 내역 (소비·관리자 부여 모두 기록)
+# ====================================================================
+class CreditTransaction(Base):
+    """credit 입출금 1건 = 1 row. 잔액은 User.credits 가 진실의 원천이고
+    여기는 내역 (audit log) — 관리자 페이지에서 사용자별 히스토리 조회용."""
+    __tablename__ = "credit_transactions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_uuid)
+
+    # 대상 사용자
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+
+    # 변동량 — 음수면 소비, 양수면 적립. 0 은 admin/mod 면접 생성 흔적 기록용.
+    delta:           Mapped[int] = mapped_column(Integer)
+    balance_after:   Mapped[int] = mapped_column(Integer)
+    reason:          Mapped[str] = mapped_column(String(120), default="")
+    # 예: 'interview_create' / 'admin_grant' / 'admin_revoke' / 'free_pass(admin)'
+
+    # 면접 소비 흔적 — public_code (있으면)
+    related_session_code: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+
+    # 관리자 조정의 경우 누가 조정했는지 (자기 자신이면 self-grant)
+    created_by_user_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+# ====================================================================
+# 11. EmailVerificationToken — 로컬 회원가입 이메일 인증
+# ====================================================================
+class EmailVerificationToken(Base):
+    """로컬 회원가입 시 발급되는 1회용 인증 토큰.
+
+    - signup 직후 user_id 에 대해 새 row 생성 + 메일 발송
+    - 사용자 클릭 → token 검증 → User.email_verified=True, used_at 갱신
+    - expires_at 지나면 무효, 재발송 시 새 토큰 발급 (옛 토큰은 그대로 두되 used 안 됨)
+    """
+    __tablename__ = "email_verification_tokens"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=gen_uuid)
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    # secrets.token_urlsafe(32) — URL 안전, 약 43자
+    token:      Mapped[str]      = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    used_at:    Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

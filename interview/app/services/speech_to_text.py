@@ -16,7 +16,70 @@ import sys
 import time
 import wave
 import select
+import re
 from typing import Any, Dict, Optional
+
+
+# ============================================================
+# Whisper 환각(hallucination) 필터
+# ============================================================
+# 무음/소음 구간에서 Whisper 가 자주 만들어내는 패턴들 — YouTube 자막 학습 데이터
+# 흔적. 답변이 이 패턴 중 하나로만 구성돼 있으면 무효(공백) 처리.
+WHISPER_KO_HALLUCINATIONS = [
+    "시청해주셔서 감사합니다",
+    "시청해 주셔서 감사합니다",
+    "시청해주셔서감사합니다",
+    "구독과 좋아요 부탁드립니다",
+    "구독 좋아요 부탁드립니다",
+    "구독, 좋아요 부탁드립니다",
+    "구독과 좋아요 부탁드려요",
+    "감사합니다",
+    "고맙습니다",
+    "다음 영상에서 만나요",
+    "다음 영상에서 뵙겠습니다",
+    "다음 시간에 만나요",
+    "오늘도 좋은 하루 보내세요",
+    "MBC 뉴스",
+    "MBC 뉴스 박혜진입니다",
+    "한국어 자막",
+    "자막 제공",
+    "이상 mbc뉴스였습니다",
+]
+
+
+def _normalize_for_match(s: str) -> str:
+    """비교용 정규화 — 공백·구두점 제거, 소문자."""
+    if not s:
+        return ""
+    s = s.lower()
+    s = re.sub(r"[\s\.,!?\-~·…\(\)\[\]\"'’‘]", "", s)
+    return s
+
+
+_HALLUCINATION_NORMALIZED = {
+    _normalize_for_match(p) for p in WHISPER_KO_HALLUCINATIONS
+}
+
+
+def is_whisper_hallucination(text: str) -> bool:
+    """전체 답변이 알려진 환각 패턴 중 하나면 True.
+
+    조건: 정규화 후 매칭. 길이 짧고 (예: 한 줄 정도) 환각 패턴이 단독으로 들어간 경우.
+    사용자가 진짜 답변 안에 '감사합니다' 한 문장만 했을 가능성이 있어도, 면접 답변으로는
+    의미 없는 한 문장이라 0점 처리하는 게 안전.
+    """
+    norm = _normalize_for_match(text or "")
+    if not norm:
+        return True   # 빈 문자열도 hallucination 으로 취급
+    return norm in _HALLUCINATION_NORMALIZED
+
+
+def clean_transcript(text: str) -> str:
+    """STT 결과 후처리 — 환각이면 빈 문자열 반환, 아니면 strip 만."""
+    text = (text or "").strip()
+    if is_whisper_hallucination(text):
+        return ""
+    return text
 
 import numpy as np
 import sounddevice as sd
@@ -177,10 +240,13 @@ def transcribe_with_whisper_words(
             data = res
         else:
             data = {"text": getattr(res, "text", str(res)), "words": []}
-        return {
-            "text": data.get("text", "") or "",
-            "words": data.get("words", []) or [],
-        }
+        # Whisper 환각 필터 — 무음 구간에서 'YouTube 자막' 같은 환각 패턴이 자주 나옴
+        text = clean_transcript(data.get("text", "") or "")
+        words = data.get("words", []) or []
+        # 텍스트가 환각으로 비워졌으면 words 도 의미 없음 → 비움
+        if not text:
+            words = []
+        return {"text": text, "words": words}
     except Exception:
         # 폴백: text-only 호출
         try:
@@ -192,6 +258,8 @@ def transcribe_with_whisper_words(
             text = res if isinstance(res, str) else getattr(res, "text", str(res))
         except Exception:
             text = ""
+        # 폴백 경로에서도 환각 필터 적용
+        text = clean_transcript(text)
         return {"text": text, "words": []}
 
 

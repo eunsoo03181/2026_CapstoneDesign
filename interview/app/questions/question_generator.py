@@ -1415,6 +1415,146 @@ def assemble_questions(
     return out
 
 
+# =================================================================
+# 기업·직무 맞춤형 질문 생성 (산업·직무 무관 — 기술/비기술 모두 대응)
+# =================================================================
+# company_research.py 의 generate_company_job_based_questions_async 는 회사 리서치
+# JSON (company_overview / required_competencies / pressure_points 등) 을 기반으로 만들고,
+# 여기 generate_role_specific_questions_async 는 더 일반화된 입력 (직무 설명·사업 키워드·
+# 전공·이력서 요약) 을 받아 같은 형태의 질문 + 꼬리질문 + 평가 포인트를 산출.
+
+ROLE_SPECIFIC_QUESTION_SYSTEM_PROMPT = """
+당신은 기업 면접에서 지원자의 직무 이해도와 전문성을 평가하는 면접관입니다.
+
+목표:
+사용자가 입력한 기업명, 직무명, 직무 설명, 회사 사업 키워드, 지원자 전공 또는 경험 정보를 바탕으로
+실제 면접에서 나올 수 있는 직무 맞춤형 질문을 생성합니다.
+
+질문 생성 기준:
+1. 특정 산업이나 공기업, 기술직에만 한정하지 말고 모든 기업과 직무에 적용 가능한 질문을 생성한다.
+2. 입력된 기업과 직무에 맞게 필요한 지식, 역량, 사고방식을 확인하는 질문을 만든다.
+3. 기술직의 경우 전공 개념과 실무 적용 능력을 묻는 질문을 생성한다.
+4. 사무직, 경영지원, 영업, 마케팅, 인사, 기획 등 비기술직의 경우 직무 이해도, 상황 판단력, 데이터 해석력, 협업 방식, 문제 해결력을 묻는 질문을 생성한다.
+5. 단순 암기형 질문만 만들지 말고, 실제 업무 상황과 연결된 질문을 우선적으로 생성한다.
+6. 질문 난이도는 기초, 중간, 심화가 섞이도록 한다.
+7. 한 질문에는 하나의 핵심 개념이나 역량만 묻는다.
+8. 답변 이후 꼬리질문으로 이어질 수 있도록 질문 의도를 함께 제시한다.
+9. 민감한 개인정보, 외모, 나이, 성별 등과 관련된 질문은 생성하지 않는다.
+10. 입력 정보에 없는 내용을 단정하지 말고, 기업명·직무명·직무 설명·지원자 경험을 바탕으로 합리적인 질문을 만든다.
+
+출력은 반드시 다음 JSON 형식으로만 답하세요:
+{
+  "questions": [
+    {
+      "question": "면접 질문",
+      "difficulty": "기초/중간/심화",
+      "core_topic": "핵심 주제 또는 직무 개념",
+      "job_relevance": "이 질문이 해당 기업/직무와 관련되는 이유",
+      "intent": "면접관이 확인하려는 역량",
+      "follow_up_questions": [
+        "꼬리질문 1",
+        "꼬리질문 2"
+      ],
+      "evaluation_points": [
+        "평가 포인트 1",
+        "평가 포인트 2",
+        "평가 포인트 3"
+      ]
+    }
+  ]
+}
+"""
+
+
+ROLE_SPECIFIC_QUESTION_USER_PROMPT = """
+다음 정보를 바탕으로 실제 면접에서 나올 수 있는 기업·직무 맞춤형 질문을 생성하세요.
+
+기업명: {company_name}
+직무명: {job_title}
+직무 설명: {job_description}
+회사 사업 키워드: {company_keywords}
+지원자 전공: {major}
+지원자 경험 요약: {resume_summary}
+
+요구사항:
+- 총 {num_questions}개의 질문을 생성하세요.
+- 기업과 직무에 맞는 질문을 생성하세요.
+- 기술직이면 전공 개념과 실무 적용 질문을 포함하세요.
+- 비기술직이면 직무 이해도, 문제 해결력, 상황 판단력, 협업 역량을 확인하는 질문을 포함하세요.
+- 단순 인성 질문보다는 직무 수행 능력을 확인할 수 있는 질문을 우선하세요.
+- 각 질문마다 질문 의도, 직무 관련성, 꼬리질문, 평가 포인트를 함께 작성하세요.
+"""
+
+
+async def generate_role_specific_questions_async(
+    *,
+    company_name: str = "",
+    job_title: str = "",
+    job_description: str = "",
+    company_keywords: str = "",
+    major: str = "",
+    resume_summary: str = "",
+    num_questions: int = 5,
+    model: str = "gpt-4o-mini",
+    api_key: Optional[str] = None,
+) -> List[Dict]:
+    """
+    기업·직무 맞춤형 질문 생성. 산업·직무 무관 — 기술직/비기술직 모두 대응.
+
+    입력 필드는 모두 옵션 — 빈 값은 '확인 불가' 로 채워 프롬프트 안정성 유지.
+    반환: questions[] (각 항목 schema 는 SYSTEM_PROMPT 의 JSON 형식과 동일)
+    실패 시 빈 리스트.
+    """
+    def _f(v: str) -> str:
+        v = (v or "").strip()
+        return v if v else "확인 불가"
+
+    user_prompt = ROLE_SPECIFIC_QUESTION_USER_PROMPT.format(
+        company_name=_f(company_name),
+        job_title=_f(job_title),
+        job_description=_f(job_description),
+        company_keywords=_f(company_keywords),
+        major=_f(major),
+        resume_summary=_f(resume_summary),
+        num_questions=max(1, int(num_questions)),
+    )
+
+    try:
+        client = AsyncOpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": ROLE_SPECIFIC_QUESTION_SYSTEM_PROMPT},
+                {"role": "user",   "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.5,
+            max_completion_tokens=2200 if _is_advanced(model) else 1600,
+        )
+        data = json.loads(resp.choices[0].message.content or "{}")
+    except Exception:
+        return []
+
+    items = (data.get("questions") or []) if isinstance(data, dict) else []
+    out: List[Dict] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        q_text = (it.get("question") or "").strip()
+        if not q_text:
+            continue
+        out.append({
+            "question":            q_text,
+            "difficulty":          (it.get("difficulty") or "").strip(),
+            "core_topic":          (it.get("core_topic") or "").strip(),
+            "job_relevance":       (it.get("job_relevance") or "").strip(),
+            "intent":              (it.get("intent") or "").strip(),
+            "follow_up_questions": [s for s in (it.get("follow_up_questions") or []) if isinstance(s, str) and s.strip()],
+            "evaluation_points":   [s for s in (it.get("evaluation_points")   or []) if isinstance(s, str) and s.strip()],
+        })
+    return out[:max(1, int(num_questions))]
+
+
 if __name__ == "__main__":
     sample_resume = """
     이름: 정은수

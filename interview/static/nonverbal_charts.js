@@ -15,6 +15,7 @@
 //                posture:{score,max,label}, _focus_component?, _blink_component? },
 //   metrics: { smile_ratio, focus_ratio, blink_per_minute, avg_movement_px },
 //   timeline: [{ t, smile_ratio, focus_ratio, blink_per_minute, avg_movement_px }, ...]
+// (blink_per_minute 은 점수 1점 가중만 받고 UI 에는 표시하지 않음 — 차트 시리즈에서 제외)
 // }
 
 const SERIES = [
@@ -37,23 +38,10 @@ const SERIES = [
     color: "#6366f1",         // indigo-500
     fillColor: "rgba(99,102,241,0.15)",
     fullAt: 75,
-    fullText: "75% 이상이면 응시 만점 (6점)",
+    fullText: "75% 이상이면 시선 만점에 근접",
     yMin: 0, yMax: 100,
-    rule: "시선 안정성(10점) 중 응시 컴포넌트(6점). 동공이 화면 중앙을 향한 프레임 비율을 누적 측정.",
+    rule: "시선 안정성 10점의 핵심 지표. 동공이 화면 중앙을 향한 프레임 비율을 누적 측정 — 75% 이상이면 만점 수준.",
     fmt: (v) => `${v.toFixed(1)}%`,
-  },
-  {
-    key: "blink_per_minute",
-    label: "분당 깜빡임",
-    unit: "회",
-    color: "#06b6d4",         // cyan-500
-    fillColor: "rgba(6,182,212,0.15)",
-    fullAt: 17.5,
-    fullText: "10~25회/분이면 깜빡임 만점 (4점)",
-    yMin: 0, yMax: 40,
-    rule: "시선 안정성(10점) 중 깜빡임 컴포넌트(4점). 10~25회/분이 자연스러운 구간, 너무 적거나 많으면 감점.",
-    fmt: (v) => `${v.toFixed(1)}회`,
-    bandLow: 10, bandHigh: 25,   // 만점 구간 음영
   },
   {
     key: "avg_movement_px",
@@ -74,8 +62,11 @@ const SERIES = [
  * 컨테이너에 비언어 상세(평가 설명 + 시간 추이 차트)를 렌더링.
  * @param {HTMLElement} container
  * @param {Object} payload — nonverbal_metrics (ok=true 인 경우만 호출 권장)
+ * @param {Object} [opts]
+ * @param {boolean} [opts.voiceAvailable=false] — 음성 비언어가 같이 평가됐는지.
+ *   true 면 얼굴 비언어 만점이 절반(20→10, 컴포넌트 6/10/4→3/5/2).
  */
-export function renderNonverbalDetails(container, payload) {
+export function renderNonverbalDetails(container, payload, opts = {}) {
   if (!container) return;
   if (!payload || !payload.ok) {
     container.innerHTML = "";
@@ -86,6 +77,14 @@ export function renderNonverbalDetails(container, payload) {
   const metrics = payload.metrics || {};
   const scores = payload.scores_20 || {};
 
+  // 음성 같이 평가됐으면 얼굴 비언어 만점은 10 (컴포넌트 3/5/2)
+  const voiceAvailable = !!opts.voiceAvailable;
+  const k = voiceAvailable ? 0.5 : 1.0;
+  const smileMax   = (6  * k).toFixed(0);    // '3' 또는 '6'
+  const gazeMax    = (10 * k).toFixed(0);    // '5' 또는 '10'
+  const postureMax = (4  * k).toFixed(0);    // '2' 또는 '4'
+  const totalMax   = (Number(smileMax) + Number(gazeMax) + Number(postureMax)).toFixed(0);
+
   // 옛 세션 — timeline 없는 경우 안내 + 설명 카드만
   const hasTimeline = timeline.length >= 2;
 
@@ -94,26 +93,41 @@ export function renderNonverbalDetails(container, payload) {
       <p class="text-sm font-semibold text-slate-700 mb-2">📐 이렇게 측정·평가했어요</p>
       <p class="text-xs text-slate-600 leading-relaxed">
         면접 중 MediaPipe 얼굴 인식이 매 프레임 4가지 지표를 누적합니다.
-        총 20점은 <b>표정 안정성 6</b> + <b>시선 안정성 10</b> (응시 6 + 깜빡임 4 통합) +
-        <b>자세 안정성 4</b> 로 구성됩니다.
+        총 <b>${totalMax}점</b>은 <b>표정 안정성 ${smileMax}</b> +
+        <b>시선 안정성 ${gazeMax}</b> (정면 응시 비율 중심) +
+        <b>자세 안정성 ${postureMax}</b> 로 구성됩니다${voiceAvailable ? " (음성 비언어 10점과 분담)" : ""}.
         아래 그래프는 면접이 진행되는 동안 각 지표의 누적 평균이
         어떻게 변해 갔는지 보여줍니다 — 후반으로 갈수록 안정된 값에 수렴합니다.
       </p>
     </div>`;
 
+  // 각 지표 카드 — 음성 분담 케이스면 만점 안내 텍스트도 비례 축소
+  const seriesMaxFor = {
+    smile_ratio:     smileMax,
+    focus_ratio:     gazeMax,
+    avg_movement_px: postureMax,
+  };
   const chartsHtml = SERIES.map(s => {
     const finalVal = metrics[s.key];
     const finalFmt = (typeof finalVal === "number") ? s.fmt(finalVal) : "-";
     const chartSvg = hasTimeline ? buildLineChart(timeline, s) : emptyChartPlaceholder(s);
+    // fullText 의 (6점)/(10점)/(4점) 등 원본 만점 표기를 동적 만점으로 치환
+    const dynamicMax = seriesMaxFor[s.key];
+    const fullText = dynamicMax
+      ? s.fullText.replace(/\(?\d+점\)?/g, `(${dynamicMax}점)`).replace(/만점\s*\(?\d+점/g, `만점 (${dynamicMax}점`)
+      : s.fullText;
+    const rule = dynamicMax
+      ? s.rule.replace(/\d+점/g, `${dynamicMax}점`)
+      : s.rule;
     return `
       <div class="rounded-xl border border-slate-200 bg-white p-4">
         <div class="flex items-baseline justify-between mb-1">
           <p class="text-sm font-semibold text-slate-800">${s.label}</p>
           <p class="text-sm font-bold tabular-nums" style="color:${s.color}">${finalFmt}</p>
         </div>
-        <p class="text-[11px] text-slate-500 mb-2">${s.fullText}</p>
+        <p class="text-[11px] text-slate-500 mb-2">${fullText}</p>
         ${chartSvg}
-        <p class="text-[11px] text-slate-600 mt-2 leading-relaxed">${s.rule}</p>
+        <p class="text-[11px] text-slate-600 mt-2 leading-relaxed">${rule}</p>
       </div>`;
   }).join("");
 

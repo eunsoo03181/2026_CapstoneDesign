@@ -14,6 +14,7 @@ import json
 from typing import Dict, Optional
 
 from openai import OpenAI
+from app.scoring.openai_usage import record_completion_usage
 
 
 SYSTEM_PROMPT = """너는 비대면 면접 코치이다. 지원자의 면접 중 비언어 행동 측정 결과를 보고
@@ -21,15 +22,16 @@ SYSTEM_PROMPT = """너는 비대면 면접 코치이다. 지원자의 면접 중
 
 평가 기준 (총 20점, 3축 통합):
   1. 표정 안정성  6점 — 미소 비율 20% 이상이면 만점
-  2. 시선 안정성 10점 — 응시 비율 75% 이상(6점) + 분당 깜빡임 10~25회(4점) 통합
+  2. 시선 안정성 10점 — 정면 응시 비율 75% 이상이면 만점에 근접 (깜빡임은 거의 영향 없음)
   3. 자세 안정성  4점 — 프레임당 평균 이동 1.5px 이하면 안정
 
 가이드:
 - 3가지 항목 각각에 대해 짧고 구체적인 코칭 한 줄을 작성한다.
 - 좋은 점은 짧게 인정하고, 부족한 점은 실행 가능한 개선 행동으로 제시한다.
 - "표정이 부족합니다" 식의 평가만 하지 말고 "거울 보며 자기소개 3회 연습" 같은 행동 단계를 제시한다.
-- 시선 안정성 항목은 응시와 깜빡임을 종합해 한 줄 코칭을 작성한다.
-  예: 응시는 양호하나 깜빡임이 많다 → "응시는 안정적이나 깜빡임이 다소 잦으니, 들숨에서 한 박자 시선을 머무는 연습."
+- 시선 안정성 항목은 **정면 응시 비율 (focus_ratio)** 만 기준으로 코칭한다.
+  깜빡임(blink_per_minute) 은 의도적으로 점수 가중치를 거의 두지 않으므로
+  사용자에게 절대 언급하지 않는다 — "깜빡임", "눈 깜빡임", "blink" 같은 단어 금지.
 - 종합 코멘트는 2~3문장으로 전체 인상을 정리한다.
 - 인성/외모/성격은 절대 평가하지 않는다 (오직 측정 가능한 행동만).
 
@@ -37,7 +39,7 @@ SYSTEM_PROMPT = """너는 비대면 면접 코치이다. 지원자의 면접 중
 {
   "summary": "종합 2~3문장",
   "smile":   "표정 안정성 코칭 한 줄",
-  "gaze":    "시선 안정성 코칭 한 줄 (응시 + 깜빡임 통합)",
+  "gaze":    "시선 안정성 코칭 한 줄 (정면 응시 중심, 깜빡임 언급 금지)",
   "posture": "자세 안정성 코칭 한 줄",
   "next_action": "다음 면접 전에 가장 우선 연습할 한 가지"
 }"""
@@ -75,12 +77,13 @@ def generate_nonverbal_feedback(
         gaze_block = {"score": round(gaze_score, 2), "label": gaze_label}
 
     # 모델이 보기 쉬운 요약 dict (3축)
+    # ※ 깜빡임은 점수에 1점만 가중되며 사용자에게 노출하지 않으므로 입력에서도 생략 — LLM 이
+    #   실수로 코칭에 언급하지 않도록.
     user_payload = {
         "총점": metrics.get("score_20"),
         "지표": {
             "미소 비율 (%)":      m.get("smile_ratio"),
             "정면 응시 비율 (%)": m.get("focus_ratio"),
-            "분당 깜빡임":        m.get("blink_per_minute"),
             "평균 자세 이동 (px/f)": m.get("avg_movement_px"),
         },
         "항목별 점수 (3축)": {
@@ -88,10 +91,7 @@ def generate_nonverbal_feedback(
                           "라벨": s.get("smile",   {}).get("label")},
             "시선 안정성":  {"점수": gaze_block.get("score"),            "만점": 10,
                           "라벨": gaze_block.get("label"),
-                          "분해": {
-                              "응시(75% 만점)": (s.get("_focus_component") or s.get("focus") or {}).get("score"),
-                              "깜빡임(10~25/min 만점)": (s.get("_blink_component") or s.get("blink") or {}).get("score"),
-                          }},
+                          "비고": "정면 응시 비율 75% 이상이면 만점에 근접"},
             "자세 안정성":  {"점수": s.get("posture", {}).get("score"), "만점": 4,
                           "라벨": s.get("posture", {}).get("label")},
         },
@@ -109,6 +109,7 @@ def generate_nonverbal_feedback(
         temperature=0.3,
         max_completion_tokens=600,
     )
+    record_completion_usage(resp, endpoint="nonverbal_feedback", model=model)
     try:
         data = json.loads(resp.choices[0].message.content)
     except Exception:

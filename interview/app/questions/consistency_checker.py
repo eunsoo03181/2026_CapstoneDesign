@@ -16,6 +16,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
+from app.scoring.openai_usage import record_completion_usage
 
 
 CONSISTENCY_SYSTEM_PROMPT = """너는 비대면 면접 연습 시스템의 답변 일관성 검증 도우미다.
@@ -99,6 +100,7 @@ def check_consistency(
             temperature=0.2,
             max_completion_tokens=600,
         )
+        record_completion_usage(resp, endpoint="consistency_checker", model=model)
         data = json.loads(resp.choices[0].message.content or "{}")
     except Exception as e:
         return {

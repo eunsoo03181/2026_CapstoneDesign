@@ -66,6 +66,8 @@ def get_or_create_user(db: Session, google_userinfo: dict) -> User:
         user.email = google_userinfo.get("email", user.email)
         user.name = google_userinfo.get("name", user.name)
         user.picture = google_userinfo.get("picture", user.picture)
+        # Google 로그인 시점에 이메일 인증 강제 활성화 (이미 검증된 이메일)
+        user.email_verified = True
         db.commit()
         db.refresh(user)
         return user
@@ -76,6 +78,9 @@ def get_or_create_user(db: Session, google_userinfo: dict) -> User:
         email=google_userinfo.get("email", ""),
         name=google_userinfo.get("name", ""),
         picture=google_userinfo.get("picture"),
+        auth_provider="google",
+        # Google 이 이미 이메일을 검증한 사용자 — 별도 인증 메일 불필요
+        email_verified=bool(google_userinfo.get("email_verified", True)),
     )
     db.add(user)
     db.commit()

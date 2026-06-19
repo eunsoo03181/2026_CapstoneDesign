@@ -35,8 +35,8 @@ class InterviewAnalyzer:
 
     # 항목별 만점 (분해 컴포넌트)
     SMILE_MAX = 6.0
-    FOCUS_MAX = 6.0      # 시선 안정성의 'focus' 컴포넌트
-    BLINK_MAX = 4.0      # 시선 안정성의 'blink' 컴포넌트
+    FOCUS_MAX = 9.0      # 시선 안정성의 'focus' (응시) 컴포넌트
+    BLINK_MAX = 1.0      # 시선 안정성의 'blink' 컴포넌트 — 최소 가중 (1점)
     GAZE_MAX  = 10.0     # 시선 안정성 통합 (focus + blink)
     POSTURE_MAX = 4.0
     TOTAL_MAX = 20.0
@@ -265,17 +265,13 @@ class InterviewAnalyzer:
         return "응시 과다(깜빡임 적음)"
 
     @classmethod
-    def _gaze_label(cls, focus_ratio: float, bpm: float) -> str:
-        focus_ok = focus_ratio >= 70
-        blink_ok = cls.BLINK_LOW <= bpm <= cls.BLINK_HIGH
-        if focus_ok and blink_ok:
+    def _gaze_label(cls, focus_ratio: float, _bpm: float) -> str:
+        # 깜빡임은 1점만 가중되며 사용자에게 노출하지 않음 — 응시 비율로만 라벨링
+        if focus_ratio >= 75:
             return "시선 안정"
-        if focus_ok:
-            return "응시는 양호하나 깜빡임 다소 많음" if bpm > cls.BLINK_HIGH \
-                else "응시는 양호하나 깜빡임 적음"
-        if blink_ok:
-            return "깜빡임은 안정적이나 시선 이탈 다소 있음"
-        return "시선 이탈·깜빡임 불안정"
+        if focus_ratio >= 50:
+            return "양호"
+        return "시선 이탈 잦음"
 
     @staticmethod
     def _posture_label(avg_mv: float) -> str:

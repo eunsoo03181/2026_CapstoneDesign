@@ -2,7 +2,7 @@
 면접 결과를 사람이 읽기 좋은 txt + 원본 json 으로 저장.
 
 사용 예:
-    from report_writer import save_session_report
+    from app.analysis.report_writer import save_session_report
     out_dir = save_session_report(result, resume_text)
     print("저장됨:", out_dir)
 """

@@ -9,7 +9,7 @@
   - .hwpx  : 한글 신포맷 (zip+XML)   (별도 의존성 없음)
 
 사용:
-  from resume_loader import load_resume
+  from app.services.resume_loader import load_resume
   text = load_resume("/path/to/resume.docx")
 """
 

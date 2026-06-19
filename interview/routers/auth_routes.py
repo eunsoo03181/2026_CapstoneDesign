@@ -22,6 +22,9 @@ async def google_login(request: Request):
             detail="GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET 환경변수가 설정되지 않았습니다.",
         )
     redirect_uri = request.url_for("google_callback")
+    # 디버그 로그 — uvicorn 콘솔에 정확한 URI 출력.
+    # Google Console 의 '승인된 리디렉션 URI' 에 이 값을 그대로 등록해야 함.
+    print(f"[OAuth] Google authorize_redirect → redirect_uri={redirect_uri!s}")
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
 
 
@@ -64,6 +67,7 @@ async def me(request: Request, current_user: User = Depends(get_current_user), d
         if a:
             admin_info = {"id": a.id, "name": a.name, "email": a.email}
 
+    is_unlimited = current_user.role in ("admin", "moderator")
     return {
         "id":      current_user.id,
         "email":   current_user.email,
@@ -73,4 +77,10 @@ async def me(request: Request, current_user: User = Depends(get_current_user), d
         "is_active": current_user.is_active,
         "impersonating": impersonating,
         "admin": admin_info,
+        # Credit 잔액 — 헤더 chip 에 표시. admin/moderator 는 무제한.
+        "credits": int(current_user.credits or 0),
+        "credits_unlimited": is_unlimited,
+        # 이메일 인증 — False 면 면접 시작 차단됨. 헤더에서 재발송 안내.
+        "email_verified": bool(getattr(current_user, "email_verified", True)),
+        "auth_provider": current_user.auth_provider,
     }

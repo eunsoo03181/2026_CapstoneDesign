@@ -127,6 +127,7 @@ def _build_full_detail(s: InterviewSession) -> dict:
     voice_eval = None
     voice_per_question: list = []
     consistency_checks: list = []
+    company_research = None
     if nv:
         raw = nv.raw_metrics_json or {}
         # 시각 비언어 — score_20 > 0 또는 metrics 가 있을 때만 유효 표시
@@ -160,6 +161,7 @@ def _build_full_detail(s: InterviewSession) -> dict:
             voice_eval = raw.get("voice_eval")
             voice_per_question = raw.get("voice_per_question") or []
             consistency_checks = raw.get("consistency_checks") or []
+            company_research = raw.get("company_research")
 
     return {
         "public_code": s.public_code,
@@ -185,10 +187,11 @@ def _build_full_detail(s: InterviewSession) -> dict:
         "questions": questions,
         "nonverbal_metrics": nonverbal_payload,
         "nonverbal_feedback": nonverbal_feedback,
-        # 신규: 음성 비언어 + 답변 일관성 검증
+        # 신규: 음성 비언어 + 답변 일관성 검증 + 회사 리서치
         "voice_eval": voice_eval,
         "voice_per_question": voice_per_question,
         "consistency_checks": consistency_checks,
+        "company_research": company_research,
     }
 
 
@@ -527,7 +530,7 @@ def get_video_url(
         raise HTTPException(404, "영상이 없습니다.")
 
     try:
-        from storage import resolve_for_download
+        from app.services.storage import resolve_for_download
         url = resolve_for_download(vclip.video_path, expires_in=3600)
         if not url:
             raise HTTPException(500, "영상 URL 생성 실패")
@@ -620,7 +623,7 @@ def run_deep_analysis(
     payload["nonverbal_score_20"]= s.nonverbal_score_20
 
     try:
-        from deep_analysis import generate_deep_analysis, DEEP_MODEL_DEFAULT
+        from app.analysis.deep_analysis import generate_deep_analysis, DEEP_MODEL_DEFAULT
         result = generate_deep_analysis(payload, model=DEEP_MODEL_DEFAULT)
     except Exception as e:
         raise HTTPException(500, f"심층 분석 생성 실패: {e}")
@@ -679,7 +682,7 @@ def hard_delete_session(
 
     # 1) Supabase Storage 영상 파일 삭제
     try:
-        from storage import delete_video, parse_uri
+        from app.services.storage import delete_video, parse_uri
         for q in s.questions:
             if q.answer and q.answer.video_clip and q.answer.video_clip.video_path:
                 scheme, _ = parse_uri(q.answer.video_clip.video_path)

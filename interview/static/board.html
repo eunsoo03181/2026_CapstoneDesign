@@ -9,7 +9,7 @@
 <link rel="stylesheet" as="style" crossorigin
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
 <style>body{font-family:'Pretendard Variable',system-ui,sans-serif}</style>
-<script src="/static/admin_chrome.js?v=board" defer></script>
+<script src="/static/admin_chrome.js?v=credit-tip" defer></script>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
 
@@ -132,9 +132,11 @@ async function load() {
     const ul = $('cards');
     ul.innerHTML = '';
     data.items.forEach(s => {
-      const hasNv = !!s.has_nonverbal;
-      const score = hasNv ? s.final_score_100 : s.content_score_80;
-      const max   = hasNv ? 100 : 80;
+      // 모든 점수는 100점 만점 환산 (final_score_100). 옛 세션 fallback: 언어 점수만 있을 때 ×1.25
+      const score = (s.final_score_100 != null)
+        ? s.final_score_100
+        : (s.content_score_80 != null ? Number(s.content_score_80) * 1.25 : null);
+      const max   = 100;
       const scoreText = score != null ? Number(score).toFixed(1) : '--';
       const title = (s.title && s.title.trim()) || '면접';
 

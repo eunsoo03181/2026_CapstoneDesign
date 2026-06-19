@@ -16,8 +16,9 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from db import get_db, User, InterviewSession
+from db import get_db, User, InterviewSession, CreditTransaction
 from auth.deps import require_admin
+from app.scoring.credit_ops import adjust_credit, list_transactions
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -380,3 +381,76 @@ def start_impersonate(
     request.session["admin_id"] = me.id
     request.session["user_id"]  = user_id
     return {"ok": True, "viewing_as": {"id": target.id, "name": target.name, "email": target.email}}
+
+
+# ============================================================
+# Credit (재화) 관리
+# ============================================================
+
+class CreditAdjustBody(BaseModel):
+    delta: int                                 # 양수=부여 / 음수=차감 (음수 잔액은 0 클램프)
+    reason: Optional[str] = "admin_adjust"     # 사유 (감사 로그)
+
+
+@router.get("/users/{user_id}/credits")
+def get_user_credits(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """사용자의 현재 잔액 + 최근 N건 transactions."""
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "사용자를 찾을 수 없습니다.")
+
+    txs = list_transactions(db, target, limit=limit)
+    return {
+        "user_id": target.id,
+        "name": target.name,
+        "email": target.email,
+        "role": target.role,
+        "balance": int(target.credits or 0),
+        "unlimited": target.role in ("admin", "moderator"),
+        "transactions": [
+            {
+                "id": t.id,
+                "delta": t.delta,
+                "balance_after": t.balance_after,
+                "reason": t.reason,
+                "related_session_code": t.related_session_code,
+                "created_by_user_id": t.created_by_user_id,
+                "created_at": t.created_at,
+            } for t in txs
+        ],
+    }
+
+
+@router.post("/users/{user_id}/credits")
+def adjust_user_credits(
+    user_id: str,
+    body: CreditAdjustBody,
+    db: Session = Depends(get_db),
+    me: User = Depends(require_admin),
+):
+    """관리자가 임의 delta 로 credit 조정. 음수 잔액 → 0 클램프."""
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "사용자를 찾을 수 없습니다.")
+    if not isinstance(body.delta, int) or body.delta == 0:
+        raise HTTPException(400, "delta 는 0 이 아닌 정수여야 합니다.")
+
+    previous = int(target.credits or 0)
+    new_balance = adjust_credit(
+        db, target,
+        delta=body.delta,
+        reason=(body.reason or "admin_adjust")[:120],
+        by_user=me,
+    )
+    return {
+        "ok": True,
+        "user_id": target.id,
+        "previous_balance": previous,
+        "new_balance": new_balance,
+        "delta_applied": new_balance - previous,    # 음수 잔액 클램프 반영
+    }

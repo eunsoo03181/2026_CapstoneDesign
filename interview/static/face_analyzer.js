@@ -11,12 +11,12 @@ import {
 
 // 점수 상한 (3축으로 통합)
 //   표정 안정성    : 6
-//   시선 안정성    : 10 (focus 6 + blink 4 통합)
+//   시선 안정성    : 10 (focus 9 + blink 1 통합) — 깜빡임은 거의 영향 없음
 //   자세 안정성    : 4
 //   합계         : 20
 const SMILE_MAX = 6.0;
-const FOCUS_MAX = 6.0;     // 시선 안정성의 'focus' 컴포넌트
-const BLINK_MAX = 4.0;     // 시선 안정성의 'blink' 컴포넌트
+const FOCUS_MAX = 9.0;     // 시선 안정성의 'focus' (응시) 컴포넌트
+const BLINK_MAX = 1.0;     // 시선 안정성의 'blink' 컴포넌트 — 최소 가중 (1점)
 const GAZE_MAX  = 10.0;    // 시선 안정성 통합 (focus + blink)
 const POSTURE_MAX = 4.0;
 
@@ -134,6 +134,12 @@ export class FaceAnalyzer {
           const result = this.faceLandmarker.detectForVideo(this.videoEl, t);
           this._processResult(result);
           if (this.canvasCtx) this._draw(result);
+          // 디버그 — 처음 1프레임 + 매 100프레임마다 진행 상황 로그
+          if (this.totalFrames === 1 || (this.totalFrames > 0 && this.totalFrames % 100 === 0)) {
+            console.log(`[FaceAnalyzer] frame=${this.totalFrames} ` +
+                        `(video=${this.videoEl.videoWidth}×${this.videoEl.videoHeight}, ` +
+                        `readyState=${this.videoEl.readyState})`);
+          }
         } catch (e) {
           // 검출 실패는 무시 (간헐적으로 발생)
         }
@@ -319,13 +325,11 @@ function blinkLabel(bpm) {
   if (bpm > 25) return "긴장도 높음(과다 깜빡임)";
   return "응시 과다(깜빡임 적음)";
 }
-function gazeLabel(focusRatio, bpm) {
-  const focusOk = focusRatio >= 70;
-  const blinkOk = bpm >= 10 && bpm <= 25;
-  if (focusOk && blinkOk) return "시선 안정";
-  if (focusOk) return bpm > 25 ? "응시는 양호하나 깜빡임 다소 많음" : "응시는 양호하나 깜빡임 적음";
-  if (blinkOk) return "깜빡임은 안정적이나 시선 이탈 다소 있음";
-  return "시선 이탈·깜빡임 불안정";
+function gazeLabel(focusRatio, _bpm) {
+  // 깜빡임은 점수에 거의 영향이 없고 사용자에게도 노출하지 않음 — 응시 비율로만 라벨링
+  if (focusRatio >= 75) return "시선 안정";
+  if (focusRatio >= 50) return "양호";
+  return "시선 이탈 잦음";
 }
 function postureLabel(mv) {
   if (mv <= 1.5) return "안정";

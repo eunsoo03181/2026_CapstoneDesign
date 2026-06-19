@@ -15,7 +15,7 @@
 .toggle.on:before{transform:translateX(18px)}
 .toggle.disabled{opacity:.4;cursor:not-allowed}
 </style>
-<script src="/static/admin_chrome.js?v=board" defer></script>
+<script src="/static/admin_chrome.js?v=credit-tip" defer></script>
 </head>
 
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -69,8 +69,47 @@
         <button id="replayBtn" class="hidden px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-lg text-sm font-medium transition" title="모범 답안 검증 등 디버깅 용도">
           같은 질문으로 다시 면접
         </button>
+        <!-- 관리자 전용: 점수 재계산 (leniency 보정 복구) -->
+        <button id="recomputeBtn" class="hidden px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium transition" title="채점 보정(leniency) 을 기준값으로 재계산">
+          점수 재계산
+        </button>
       </div>
     </div>
+
+    <!-- 관리자 전용: 점수 재계산 박스 (기본 숨김) -->
+    <section id="recomputeBox" class="hidden bg-rose-50/40 border-2 border-rose-200 rounded-2xl p-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="px-1.5 py-0.5 bg-rose-600 text-white rounded text-[10px] font-bold tracking-wider">ADMIN</span>
+          <h3 class="font-bold text-rose-700">🔧 점수 재계산</h3>
+        </div>
+        <button id="recomputeCloseBtn" class="text-rose-500 hover:text-rose-700 text-sm">닫기 ×</button>
+      </div>
+      <p class="text-xs text-slate-600 mb-3 leading-relaxed">
+        leniency=1.0 으로 재계산하면 디버그 보정이 제거된 원본 점수가 됩니다.
+        evaluations 의 답변별 raw 점수 평균 + nonverbal raw 데이터를 사용해 정확하게 복원합니다.
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 mb-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-700 mb-1">leniency 계수 (0.1 ~ 3.0)</label>
+          <input id="recomputeLeniency" type="number" step="0.05" min="0.1" max="3.0" value="1.00"
+                 class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm tabular-nums" />
+        </div>
+        <div class="self-end">
+          <button id="recomputePreviewBtn" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-sm font-medium">
+            미리보기 (dry-run)
+          </button>
+        </div>
+        <div class="self-end">
+          <button id="recomputeApplyBtn" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold">
+            저장
+          </button>
+        </div>
+      </div>
+
+      <div id="recomputeResult" class="hidden bg-white border border-slate-200 rounded-lg p-3 text-xs"></div>
+    </section>
 
     <!-- 종합 점수 -->
     <div class="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-2xl shadow-lg p-8 text-white">
@@ -132,6 +171,9 @@
 
     <!-- 답변 일관성 검증 카드 -->
     <div id="consistencyCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
+
+    <!-- 회사·직무 리서치 카드 -->
+    <div id="companyResearchCard" class="hidden bg-white border border-slate-200 rounded-2xl p-6"></div>
 
     <!-- 질문별 카드 -->
     <div id="qaCards" class="space-y-4"></div>
@@ -204,8 +246,8 @@
 </div>
 
 <script type="module">
-import { renderNonverbalDetails } from '/static/nonverbal_charts.js?v=20260515';
-import { renderVoiceCard, renderConsistencyCard } from '/static/nonverbal_extras.js?v=20260516';
+import { renderNonverbalDetails } from '/static/nonverbal_charts.js?v=20260527';
+import { renderVoiceCard, renderConsistencyCard, renderCompanyResearchCard } from '/static/nonverbal_extras.js?v=20260516b';
 
 const $ = (id) => document.getElementById(id);
 const publicCode = decodeURIComponent(location.pathname.split('/').pop());
@@ -273,29 +315,63 @@ function render() {
   $('analysisBtn').href = `/analysis/${encodeURIComponent(detail.public_code)}`;
 
   const hasVisual = !!(detail.nonverbal_metrics && detail.nonverbal_metrics.ok);
-  const hasVoice = !!(detail.voice_eval && detail.voice_eval.ok);
+  const hasVoice  = !!(detail.voice_eval && detail.voice_eval.ok);
   const content = detail.content_score_80 ?? 0;
-  // 시각 점수 (DB 의 score_20 의 절반) + 음성 점수
-  const visual10 = hasVisual ? (Number(detail.nonverbal_metrics.score_20 || 0) / 2) : 0;
-  const voice10 = hasVoice ? Number(detail.voice_eval.voice_nonverbal_total || 0) : 0;
-  const anyNonverbal = hasVisual || hasVoice;
+  // 한 축만 살아있으면 그 축이 만점 20점 흡수 — final_score.py 의 케이스별 로직과 동일.
+  let visualMax, voiceMax, visualScore, voiceScore;
+  if (hasVisual && hasVoice) {
+    visualMax = 10; voiceMax = 10;
+    visualScore = Number(detail.nonverbal_metrics.score_20 || 0) / 2;
+    voiceScore  = Number(detail.voice_eval.voice_nonverbal_total || 0);
+  } else if (hasVisual && !hasVoice) {
+    visualMax = 20; voiceMax = 0;
+    visualScore = Number(detail.nonverbal_metrics.score_20 || 0);   // 0~20 그대로
+    voiceScore  = 0;
+  } else if (!hasVisual && hasVoice) {
+    visualMax = 0; voiceMax = 20;
+    visualScore = 0;
+    voiceScore  = Number(detail.voice_eval.voice_nonverbal_total || 0) * 2;  // 10 → 20 흡수
+  } else {
+    visualMax = 0; voiceMax = 0;
+    visualScore = 0; voiceScore = 0;
+  }
 
   $('contentScore').textContent = `${Number(content).toFixed(1)} / 80`;
   $('contentBar').style.width = (content/80*100) + '%';
 
-  if (anyNonverbal) {
-    const total100 = detail.final_score_100 != null ? detail.final_score_100 : (content + visual10 + voice10);
-    $('finalScore').textContent = Number(total100).toFixed(1);
-    $('finalMax').textContent = '/ 100';
-    $('visualScore').textContent = hasVisual ? `${visual10.toFixed(1)} / 10` : '미수집 / 10';
-    $('visualBar').style.width = (visual10/10*100) + '%';
-    $('voiceScore').textContent = hasVoice ? `${voice10.toFixed(1)} / 10` : '미수집 / 10';
-    $('voiceBar').style.width = (voice10/10*100) + '%';
+  // ── 종합 점수: 항상 /100 만점 비례 환산 ──
+  const rawTotal = content + visualScore + voiceScore;
+  const rawMax = 80 + visualMax + voiceMax;
+  const scaled100 = rawMax > 0 ? Math.min(100, rawTotal * (100 / rawMax)) : 0;
+  $('finalScore').textContent = scaled100.toFixed(1);
+  $('finalMax').textContent = '/ 100';
+
+  if (hasVisual && visualMax > 0) {
+    $('visualScore').textContent = `${visualScore.toFixed(1)} / ${visualMax}`;
+    $('visualBar').style.width = (visualScore/visualMax*100) + '%';
   } else {
-    $('finalScore').textContent = Number(content).toFixed(1);
-    $('finalMax').textContent = '/ 80';
     const vr = $('visualRow'); if (vr) vr.classList.add('hidden');
+  }
+  if (hasVoice && voiceMax > 0) {
+    $('voiceScore').textContent = `${voiceScore.toFixed(1)} / ${voiceMax}`;
+    $('voiceBar').style.width = (voiceScore/voiceMax*100) + '%';
+  } else {
     const vor = $('voiceRow'); if (vor) vor.classList.add('hidden');
+  }
+
+  // 환산 안내 (만점이 100 미만이었던 경우) — 케이스별 분기로 명확히
+  if (rawMax < 100) {
+    const missing = [];
+    if (!hasVisual) missing.push('카메라 OFF로 <b>시각 비언어</b>');
+    if (!hasVoice)  missing.push('텍스트 답변으로 <b>음성 비언어</b>');
+    const reason = missing.join(' + ') + ' 평가가 빠졌어요';
+    const factor = (100 / rawMax).toFixed(2);
+    const note = document.createElement('p');
+    note.className = 'text-[11px] opacity-80 mt-2 leading-relaxed';
+    note.innerHTML =
+      `※ ${reason}. 100점 비교를 위해 원본 만점 <b>${rawMax}점</b> 을 ` +
+      `<b>×${factor}</b> 환산했어요 (${rawTotal.toFixed(1)} / ${rawMax} → ${scaled100.toFixed(1)} / 100).`;
+    $('finalScore').parentElement.parentElement.appendChild(note);
   }
 
   // 다운로드 — 이력서
@@ -338,9 +414,10 @@ function render() {
   // 비언어 피드백 (시각 카드 + 차트)
   renderNonverbalFeedback(detail);
 
-  // 음성 비언어 카드 + 답변 일관성 카드
+  // 음성 비언어 카드 + 답변 일관성 카드 + 회사 리서치 카드
   renderVoiceCard($('voiceCard'), detail.voice_eval, detail.voice_per_question);
   renderConsistencyCard($('consistencyCard'), detail.consistency_checks, detail.questions);
+  renderCompanyResearchCard($('companyResearchCard'), detail.company_research);
 
   // 질문 카드
   const cards = $('qaCards');
@@ -573,6 +650,89 @@ $('deleteBtn').addEventListener('click', async () => {
         alert('재시도 면접 생성 실패: ' + e.message);
       }
     });
+
+    // ===== 점수 재계산 =====
+    $('recomputeBtn').classList.remove('hidden');
+    $('recomputeBtn').addEventListener('click', () => {
+      $('recomputeBox').classList.remove('hidden');
+      $('recomputeBox').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+    $('recomputeCloseBtn').addEventListener('click', () => {
+      $('recomputeBox').classList.add('hidden');
+      $('recomputeResult').classList.add('hidden');
+    });
+    const _doRecompute = async (dryRun) => {
+      const leniency = parseFloat($('recomputeLeniency').value) || 1.0;
+      if (leniency < 0.1 || leniency > 3.0) {
+        alert('leniency 는 0.1 ~ 3.0 범위여야 합니다.');
+        return;
+      }
+      if (!dryRun) {
+        if (!confirm(`leniency=${leniency.toFixed(2)} 로 DB 점수를 영구 갱신합니다.\n\n진행할까요? (먼저 '미리보기' 로 결과를 확인하세요)`)) return;
+      }
+      const btn = dryRun ? $('recomputePreviewBtn') : $('recomputeApplyBtn');
+      btn.disabled = true;
+      const origText = btn.textContent;
+      btn.textContent = '계산 중...';
+      try {
+        const r = await fetch(`/api/admin/sessions/${encodeURIComponent(publicCode)}/recompute`, {
+          method:'POST',
+          credentials:'same-origin',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({leniency, dry_run: dryRun}),
+        });
+        if (!r.ok) {
+          const e = await r.json().catch(()=>({}));
+          throw new Error(e.detail || r.statusText);
+        }
+        const data = await r.json();
+        const rowHtml = (label, before, after) => {
+          const delta = after - before;
+          const sign = delta >= 0 ? '+' : '';
+          const cls = Math.abs(delta) < 0.01 ? 'text-slate-400' : (delta > 0 ? 'text-emerald-600' : 'text-rose-600');
+          return `<tr>
+            <td class="px-2 py-1 text-slate-600">${label}</td>
+            <td class="px-2 py-1 text-right tabular-nums">${before.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right tabular-nums font-semibold">${after.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right tabular-nums ${cls}">${sign}${delta.toFixed(2)}</td>
+          </tr>`;
+        };
+        $('recomputeResult').innerHTML = `
+          <p class="mb-2 text-slate-600">
+            ${dryRun ? '미리보기 — DB 저장 안 됨' : '✅ DB 저장 완료'} · leniency=${data.leniency} ·
+            답변 평균 (raw): <b>${data.content_avg_from_evaluations}</b>
+          </p>
+          <table class="w-full">
+            <thead class="text-[10px] text-slate-500 uppercase">
+              <tr>
+                <th class="px-2 py-1 text-left">항목</th>
+                <th class="px-2 py-1 text-right">이전</th>
+                <th class="px-2 py-1 text-right">새 값</th>
+                <th class="px-2 py-1 text-right">변화</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowHtml('final / 100',     data.before.final_score_100,    data.after.final_score_100)}
+              ${rowHtml('content / 80',    data.before.content_score_80,   data.after.content_score_80)}
+              ${rowHtml('nonverbal / 20',  data.before.nonverbal_score_20, data.after.nonverbal_score_20)}
+            </tbody>
+          </table>
+          ${dryRun ? '<p class="mt-2 text-slate-500">결과가 맞으면 "저장" 클릭 → DB 영구 갱신</p>'
+                   : '<p class="mt-2 text-emerald-600">새로고침하면 모든 화면에 새 점수 반영됨</p>'}`;
+        $('recomputeResult').classList.remove('hidden');
+        // 저장 직후엔 페이지 자동 새로고침 옵션
+        if (!dryRun) {
+          setTimeout(() => location.reload(), 1500);
+        }
+      } catch (e) {
+        alert('재계산 실패: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+      }
+    };
+    $('recomputePreviewBtn').addEventListener('click', () => _doRecompute(true));
+    $('recomputeApplyBtn').addEventListener('click',   () => _doRecompute(false));
   } catch (e) { /* 로그인 미인증 또는 네트워크 — 무시 */ }
 })();
 
@@ -631,11 +791,13 @@ function renderNonverbalFeedback(d) {
   }
   if (details) {
     details.classList.remove('hidden');
-    renderNonverbalDetails($('nonverbalDetailsBody'), metrics);
+    renderNonverbalDetails($('nonverbalDetailsBody'), metrics, {
+      voiceAvailable: !!(d.voice_eval && d.voice_eval.ok),
+    });
   }
   const s = metrics.scores_20 || {};
   // 3축 통합 — 옛 데이터(focus + blink 분리) 호환
-  const gazeScore = (s.gaze?.score != null)
+  const gazeScoreRaw = (s.gaze?.score != null)
     ? s.gaze.score
     : Number(((s.focus?.score ?? 0) + (s.blink?.score ?? 0)).toFixed(2));
   const gazeLabel = s.gaze?.label
@@ -643,24 +805,33 @@ function renderNonverbalFeedback(d) {
   const gazeFb = fb.gaze
     || [fb.focus, fb.blink].filter(Boolean).join(' ');
 
+  // 음성 비언어가 같이 있으면 얼굴 비언어 총점은 10 → 컴포넌트 만점도 절반.
+  const hasVoice = !!(d.voice_eval && d.voice_eval.ok);
+  const k = hasVoice ? 0.5 : 1.0;
+  const smileScoreRaw   = s.smile?.score   ?? 0;
+  const postureScoreRaw = s.posture?.score ?? 0;
+  const smileMax   = 6 * k,  gazeMax = 10 * k,  postureMax = 4 * k;
+  const totalMax   = (smileMax + gazeMax + postureMax).toFixed(0);
+  const totalScore = (Number(metrics.score_20 ?? 0) * k).toFixed(2);
+
   card.classList.remove('hidden');
   card.innerHTML = `
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-bold">비언어 분석 피드백</h3>
-      <span class="text-xs text-slate-400">${Number(metrics.score_20 ?? 0).toFixed(2)} / 20</span>
+      <span class="text-xs text-slate-400">${totalScore} / ${totalMax}${hasVoice ? ' · 음성과 분담' : ''}</span>
     </div>
     <p class="text-sm text-slate-700 leading-relaxed mb-4">${escapeHtml(fb.summary || '')}</p>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs font-semibold text-slate-500 mb-1">표정 안정성 · ${s.smile?.score ?? '-'} / 6 — ${escapeHtml(s.smile?.label ?? '')}</p>
+        <p class="text-xs font-semibold text-slate-500 mb-1">표정 안정성 · ${(smileScoreRaw * k).toFixed(2)} / ${smileMax.toFixed(0)} — ${escapeHtml(s.smile?.label ?? '')}</p>
         <p class="text-xs text-slate-700">${escapeHtml(fb.smile || '')}</p>
       </div>
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs font-semibold text-slate-500 mb-1">시선 안정성 · ${gazeScore ?? '-'} / 10 — ${escapeHtml(gazeLabel)}</p>
+        <p class="text-xs font-semibold text-slate-500 mb-1">시선 안정성 · ${(Number(gazeScoreRaw) * k).toFixed(2)} / ${gazeMax.toFixed(0)} — ${escapeHtml(gazeLabel)}</p>
         <p class="text-xs text-slate-700">${escapeHtml(gazeFb)}</p>
       </div>
       <div class="bg-slate-50 rounded-lg p-3">
-        <p class="text-xs font-semibold text-slate-500 mb-1">자세 안정성 · ${s.posture?.score ?? '-'} / 4 — ${escapeHtml(s.posture?.label ?? '')}</p>
+        <p class="text-xs font-semibold text-slate-500 mb-1">자세 안정성 · ${(postureScoreRaw * k).toFixed(2)} / ${postureMax.toFixed(0)} — ${escapeHtml(s.posture?.label ?? '')}</p>
         <p class="text-xs text-slate-700">${escapeHtml(fb.posture || '')}</p>
       </div>
     </div>

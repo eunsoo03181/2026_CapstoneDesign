@@ -1,5 +1,5 @@
 # =============================================================================
-# MockTalk .gitignore
+# Signal Catch .gitignore
 # 보안(PII·API 키)·OS·에디터·캐시·빌드·미디어 자산 모두 차단.
 #
 # 핵심 원칙
@@ -26,6 +26,8 @@ poetry.lock
 
 # ─── 가상환경 ─────────────────────────────────────────────────────────────────
 venv/
+venv.nosync/         # macOS — iCloud Drive 동기화 제외용 가상환경 (이름 마지막에 .nosync)
+*.nosync/            # .nosync 확장자 폴더 일반 (iCloud 동기화 우회 패턴)
 .venv/
 env/
 ENV/
@@ -296,6 +298,22 @@ test_output_*
 *.local.md
 NOTES.local
 TODO.local
+
+
+# ─── 신규 패턴 (2026-05 보강) ────────────────────────────────────────────────
+# macOS iCloud — 클라우드 전용 파일 자리표시자
+*.icloud
+
+# 로컬 TLS 인증서 (mkcert 등) — ZeroTier·LAN HTTPS 셋업 시 만들어짐
+certs/
+*.cert.pem
+*.key.pem
+
+# Claude Code 세션·메모리·로그
+.claude/
+.anthropic/
+memory/
+session_logs/
 
 
 # =============================================================================

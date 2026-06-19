@@ -16,11 +16,11 @@
 import json
 import time
 
-from question_generator import build_interview_questions
-from speech_to_text import capture_user_answer
-from answer_evaluator import evaluate_session
-from final_score import compute_final_score, render_final_report
-from report_writer import save_session_report
+from app.questions.question_generator import build_interview_questions
+from app.services.speech_to_text import capture_user_answer
+from app.scoring.answer_evaluator import evaluate_session
+from app.scoring.final_score import compute_final_score, render_final_report
+from app.analysis.report_writer import save_session_report
 # nonverbal_analyzer 는 with_camera=True 일 때만 import (cv2/mediapipe 의존성 회피)
 
 
@@ -45,7 +45,7 @@ def run(
     # 2) 카메라 비언어 분석 시작 (백그라운드)
     bg = None
     if with_camera:
-        from nonverbal_analyzer import BackgroundAnalyzer  # cv2/mediapipe 필요
+        from app.nonverbal.nonverbal_analyzer import BackgroundAnalyzer  # cv2/mediapipe 필요
         bg = BackgroundAnalyzer(show_window=show_camera_window)
         bg.start()
         print("카메라 캘리브레이션 중... 약 3초 동안 무표정으로 카메라를 응시해주세요.")
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     # 인자로 파일 경로(.txt/.docx/.pdf/.hwp/.hwpx) 가 오면 그 파일을 읽음.
     # 없으면 하드코딩 샘플로 진행.
     if len(sys.argv) > 1:
-        from resume_loader import load_resume
+        from app.services.resume_loader import load_resume
         resume_path = sys.argv[1]
         sample_resume = load_resume(resume_path)
         print(f"이력서 로드: {resume_path} ({len(sample_resume)}자)\n")

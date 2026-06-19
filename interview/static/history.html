@@ -9,7 +9,7 @@
 <link rel="stylesheet" as="style" crossorigin
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
 <style>body{font-family:'Pretendard Variable',system-ui,sans-serif}</style>
-<script src="/static/admin_chrome.js?v=board" defer></script>
+<script src="/static/admin_chrome.js?v=credit-tip" defer></script>
 </head>
 
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -99,12 +99,13 @@ async function load() {
     const ul = $('sessionList');
     ul.classList.remove('hidden');
     list.forEach(s => {
-      // 카메라 사용 안 한 면접은 80점 만점으로 표시
+      // 모든 면접 점수는 100점 만점 비례 환산값으로 통일 (final_score_100).
+      // 카메라 OFF / 텍스트 답변 등으로 시각·음성이 빠진 면접도 환산되어 저장됨.
       const hasNv = !!s.has_nonverbal;
-      const headlineScore = hasNv
-        ? (s.final_score_100 ?? null)
-        : (s.content_score_80 ?? null);
-      const headlineMax = hasNv ? 100 : 80;
+      const headlineScore = (s.final_score_100 != null)
+        ? s.final_score_100
+        : (s.content_score_80 != null ? Number(s.content_score_80) * 1.25 : null);   // 옛 세션 fallback
+      const headlineMax = 100;
       const scoreText = headlineScore != null ? Number(headlineScore).toFixed(1) : '--';
 
       const sharedBadge = s.is_shared

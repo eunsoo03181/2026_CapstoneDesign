@@ -20,7 +20,7 @@
   .card-selected { border-color: #6366f1 !important; background-color: rgb(238 242 255) !important; }
   .card-default  { border-color: rgb(226 232 240) !important; background-color: white !important; }
 </style>
-<script src="/static/admin_chrome.js?v=board" defer></script>
+<script src="/static/admin_chrome.js?v=credit-tip" defer></script>
 </head>
 
 <body class="bg-slate-50 text-slate-900">
@@ -174,6 +174,34 @@
       </div>
     </div>
 
+    <!-- ===== 실전 모드 (모든 답변 녹음 + 자동 진행) ===== -->
+    <div class="mt-5">
+      <label for="enableRealistic"
+             class="block cursor-pointer border-2 border-slate-200 hover:border-rose-300 rounded-xl p-4 transition"
+             id="realisticCard">
+        <div class="flex items-start gap-3">
+          <input id="enableRealistic" type="checkbox"
+                 class="mt-0.5 w-5 h-5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 shrink-0" />
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="font-bold text-rose-700">⚡ 실전 모드</span>
+              <span class="inline-block px-2 py-0.5 bg-rose-50 text-rose-600 border border-rose-200 rounded-full text-[10px] font-bold">
+                실제 면접처럼
+              </span>
+            </div>
+            <p class="text-xs text-slate-600 leading-relaxed">
+              <b>질문은 10초만 보이고</b> 곧바로 답변 녹음이 자동 시작됩니다 (최대 3분).
+              한 번 녹음을 끝내면 같은 질문은 다시 녹음할 수 없고, 텍스트 입력도 안 됩니다.
+              긴장감 있는 환경에서 평정심을 연습하고 싶을 때 선택하세요.
+            </p>
+            <p class="text-[11px] text-slate-400 mt-1.5">
+              ※ 카메라는 '녹화만' 으로 자동 설정됩니다 (영상은 화면에 안 보이지만 비언어 분석은 진행).
+            </p>
+          </div>
+        </div>
+      </label>
+    </div>
+
     <!-- ===== 카메라 모드 선택 ===== -->
     <div class="mt-5">
       <label class="block text-sm font-semibold text-slate-700 mb-2">카메라</label>
@@ -236,7 +264,7 @@
       <div class="flex items-center gap-1.5 text-sm text-slate-700">
         <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
           <input id="enablePressure" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
-          <span>압박 질문 추가</span>
+          <span>압박 질문 포함하기</span>
         </label>
         <span class="relative group inline-flex items-center cursor-help" tabindex="0">
           <svg class="w-4 h-4 text-slate-400 hover:text-slate-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,6 +284,85 @@
         면접 시작
       </button>
     </div>
+
+    <!-- ===== 관리자 전용 디버그 옵션 (admin role 만 보임) =====
+         질문 생성 편향과 평가 완화 계수를 켜서 회귀 테스트·모범 답안 검증 등에 사용. -->
+    <details id="adminDebugBox" class="hidden mt-4 border-2 border-rose-200 rounded-xl bg-rose-50/30">
+      <summary class="cursor-pointer p-3 text-sm font-semibold text-rose-700 flex items-center gap-2 list-none">
+        <span class="px-1.5 py-0.5 bg-rose-600 text-white rounded text-[10px] font-bold tracking-wider">ADMIN</span>
+        🔧 디버그 옵션 (관리자 전용)
+        <span class="ml-auto text-xs text-rose-500 font-normal">클릭해서 펼치기</span>
+      </summary>
+      <div class="p-4 pt-2 border-t border-rose-200 space-y-4">
+        <p class="text-xs text-slate-600">
+          질문 생성에 편향을 강제하고 채점을 후하게 만들어 디버깅·테스트에 사용합니다.
+          일반 사용자에게는 이 옵션이 보이지 않으며, 폼 위변조로 보내도 서버가 무시합니다.
+        </p>
+
+        <!-- 주제 편향 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">주제 편향</label>
+          <select id="debugTopicBias" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            <option value="balanced">균형 (기본)</option>
+            <option value="tech">기술·전공·실무 위주</option>
+            <option value="personality">인성·태도 위주</option>
+            <option value="experience">경험·프로젝트(STAR) 위주</option>
+            <option value="pressure">압박·검증 위주</option>
+          </select>
+        </div>
+
+        <!-- 난이도 편향 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">난이도 편향</label>
+          <select id="debugDifficultyBias" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            <option value="balanced">균형 (기본)</option>
+            <option value="basic">기초~중급 위주</option>
+            <option value="advanced">심화 위주 (시스템 설계·트레이드오프)</option>
+          </select>
+        </div>
+
+        <!-- 스타일 편향 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">질문 스타일</label>
+          <select id="debugStyleBias" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+            <option value="balanced">균형 (기본)</option>
+            <option value="structured">구조적 (STAR 명시 요구)</option>
+            <option value="conversational">대화형 (자연스러운 흐름)</option>
+          </select>
+        </div>
+
+        <!-- 키워드 강제 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">키워드 강제 주입 <span class="font-normal text-slate-400">(콤마 구분, 최대 10개)</span></label>
+          <input id="debugForceKeywords" type="text" maxlength="200"
+                 placeholder="예: Redis, A/B 테스트, OAuth"
+                 class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm" />
+        </div>
+
+        <!-- 기업/직무 맞춤 질문 추가 -->
+        <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+          <input id="debugRoleSpecific" type="checkbox"
+                 class="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
+          <span>기업·직무 맞춤 질문 추가 생성 <span class="text-xs text-slate-400">(회사·직무 입력 필요)</span></span>
+        </label>
+
+        <!-- 채점 보정 (점수 곱 계수) — 0.1 ~ 3.0, 모든 컴포넌트(언어·시각·음성)에 동일 적용 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center flex-wrap gap-1">
+            채점 보정 계수
+            <span id="debugLeniencyLabel" class="font-bold tabular-nums">1.00×</span>
+            <span id="debugLeniencyHint" class="font-normal text-slate-400 text-[11px]">(1.0 = 기본 · 언어·시각·음성 모두에 적용)</span>
+          </label>
+          <input id="debugLeniency" type="range" min="0.1" max="3.0" step="0.05" value="1.00"
+                 class="w-full" />
+          <div class="flex justify-between text-[10px] text-slate-400 mt-0.5 font-mono">
+            <span>0.1× (가혹)</span>
+            <span>1.0× (기본)</span>
+            <span>3.0× (관대)</span>
+          </div>
+        </div>
+      </div>
+    </details>
 
     <!-- 압박 수위 슬라이더 — 체크박스 ON 시에만 표시 -->
     <div id="pressureLevelBox" class="hidden mt-3 ml-1 pl-3 border-l-2 border-rose-200">
@@ -291,11 +398,25 @@
     </div>
 
     <!-- 카메라 영역 — 사용자에게는 카메라 영상만 보여지도록 단순화 -->
+    <!-- '녹화만' / '실전 모드' 일 때는 cameraHider overlay 가 video 위를 덮어 사용자 시야에서만 가림.
+         (video element 는 정상 위치·사이즈로 렌더링되어 face_analyzer 가 frame 처리 가능) -->
     <div id="cameraBox" class="hidden mb-5">
       <div class="bg-slate-900 rounded-xl overflow-hidden relative aspect-video max-w-3xl mx-auto">
         <video id="camVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
         <!-- 분석용 캔버스 — 비어있는 상태로 유지 (포인트 클라우드 그리지 않음) -->
         <canvas id="camOverlay" class="absolute inset-0 w-full h-full pointer-events-none hidden"></canvas>
+        <!-- 가리개 overlay — record-only / 실전 모드일 때만 보임. video 는 그대로 흐름. -->
+        <div id="cameraHider"
+             class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-white">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="w-2 h-2 bg-red-500 rounded-full pulse-record"></span>
+            <span class="text-sm font-semibold">녹화 중</span>
+          </div>
+          <p class="text-xs opacity-70 text-center px-4">
+            화면에는 영상이 보이지 않지만 분석은 정상 진행 중이에요.<br>
+            면접 종료 후 본인만 다시 볼 수 있습니다.
+          </p>
+        </div>
       </div>
     </div>
 
@@ -422,7 +543,7 @@
 </main>
 
 <script type="module">
-import { FaceAnalyzer } from '/static/face_analyzer.js?v=20260515';
+import { FaceAnalyzer } from '/static/face_analyzer.js?v=20260522c';
 
 // ===================== 상태 =====================
 let currentUser = null;
@@ -445,6 +566,12 @@ let useTextMode = false;     // 텍스트 입력 모드 활성화 여부
 let followupsEnabled = false; // 꼬리질문 사용 여부 (시작 시 결정)
 let pressureEnabled = false;  // 압박 질문 사용 여부 (시작 시 결정)
 let criticismLevel = 5;       // 1~10
+
+// 실전 모드 — 질문 10초 노출 후 자동 녹음 시작, 재녹음 불가, 텍스트 모드 차단
+let realisticMode = false;
+let realisticCountdown = null;          // 카운트다운 setInterval 핸들
+const REALISTIC_QUESTION_SEC = 10;       // 질문 노출 시간
+let qLockedForRerecord = new Set();     // 이미 녹음 끝낸 question_idx (재녹음 잠금)
 
 // 영상 녹화 (카메라 모드 != off 일 때)
 let videoRecorder = null;
@@ -493,7 +620,23 @@ function renderUserMenu() {
   $('userRole').textContent = currentUser.role || 'user';
   $('userInitial').textContent = (currentUser.name || currentUser.email || 'U')[0].toUpperCase();
   $('userMenu').classList.remove('hidden');
+  // 관리자만 디버그 옵션 박스 노출
+  if (currentUser.role === 'admin') {
+    $('adminDebugBox')?.classList.remove('hidden');
+  }
 }
+
+// 디버그 — leniency 슬라이더 라벨 실시간 동기화 (값에 따라 색상 분기)
+$('debugLeniency')?.addEventListener('input', (e) => {
+  const v = Number(e.target.value);
+  const lbl = $('debugLeniencyLabel');
+  if (!lbl) return;
+  lbl.textContent = `${v.toFixed(2)}×`;
+  lbl.classList.remove('text-rose-600', 'text-slate-700', 'text-emerald-600');
+  if (v < 0.95)      lbl.classList.add('text-rose-600');     // 깎기
+  else if (v > 1.05) lbl.classList.add('text-emerald-600');  // 후함
+  else               lbl.classList.add('text-slate-700');    // 기본
+});
 
 $('userBtn')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -512,6 +655,31 @@ $('pressureLevel')?.addEventListener('input', (e) => {
 });
 // 초기 동기화 (브라우저가 체크 상태를 기억하고 있을 때 대비)
 syncPressureUI();
+
+// ===================== 실전 모드 토글 =====================
+function syncRealisticUI() {
+  const on = !!$('enableRealistic')?.checked;
+  realisticMode = on;
+  // 카드 시각 강조
+  const card = $('realisticCard');
+  if (card) {
+    card.classList.toggle('border-rose-500', on);
+    card.classList.toggle('bg-rose-50/40', on);
+    card.classList.toggle('border-slate-200', !on);
+  }
+  // 카메라 모드 자동 'record' 강제 + 라디오 잠금
+  const radios = document.querySelectorAll('input[name="camMode"]');
+  if (on) {
+    const recordRadio = document.querySelector('input[name="camMode"][value="record"]');
+    if (recordRadio) recordRadio.checked = true;
+    radios.forEach(r => r.disabled = true);
+    syncCards('camMode', 'cam-card');
+  } else {
+    radios.forEach(r => r.disabled = false);
+  }
+}
+$('enableRealistic')?.addEventListener('change', syncRealisticUI);
+syncRealisticUI();
 
 document.addEventListener('click', () => {
   $('userDropdown')?.classList.add('hidden');
@@ -547,9 +715,41 @@ const RESUME_TTL_MS = 24 * 60 * 60 * 1000;   // 24시간 지난 항목은 무시
 })();
 
 function saveResumePoint(sid) {
+  // 실전 모드는 재개 정책상 저장 안 함 — 중도 이탈 시 무조건 폐기
+  if (realisticMode) {
+    clearResumePoint();
+    return;
+  }
   try {
     localStorage.setItem(RESUME_KEY, JSON.stringify({ sid, savedAt: Date.now() }));
   } catch (e) { /* localStorage 막힌 환경(시크릿 등)이면 그냥 무시 */ }
+}
+
+// ── 실전 모드 — 페이지 이탈 시 서버측 세션 폐기 ──
+// finalize 가 정상 완료되기 전에 사용자가 페이지를 닫거나 다른 곳으로 이동하면
+// sendBeacon 으로 /abort 호출. 서버는 interview_mode='realistic' 면 finalize 없이 즉시 폐기.
+let _realisticDiscardArmed = false;
+let _realisticDiscardSid = null;
+function _onRealisticUnload() {
+  if (!_realisticDiscardArmed || !_realisticDiscardSid) return;
+  try {
+    // FormData 로 q_idx 0 보냄 — 서버는 realistic 분기에서 무조건 폐기
+    const fd = new FormData();
+    fd.append('q_idx', '0');
+    navigator.sendBeacon(`/api/interview/${encodeURIComponent(_realisticDiscardSid)}/abort`, fd);
+  } catch (_) { /* 무시 */ }
+}
+function armRealisticDiscardOnUnload(sid) {
+  _realisticDiscardArmed = true;
+  _realisticDiscardSid = sid;
+  // 두 이벤트 모두 등록 — 브라우저/플랫폼별로 발동 조건 다름
+  window.addEventListener('pagehide', _onRealisticUnload);
+  window.addEventListener('beforeunload', _onRealisticUnload);
+}
+function disarmRealisticDiscard() {
+  // finalize 정상 진입 직전에 해제 — 그 이후 페이지 이동은 폐기 X
+  _realisticDiscardArmed = false;
+  _realisticDiscardSid = null;
 }
 function clearResumePoint() {
   try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
@@ -747,6 +947,28 @@ $('startBtn').addEventListener('click', async () => {
     form.append('pressure_mode',    pressureEnabled ? 'additive' : 'off');
     form.append('criticism_level',  String(criticismLevel));
 
+    // 실전 모드 — UI 토글에서 결정. 활성화 시 cam_mode 를 record 로 강제.
+    realisticMode = !!$('enableRealistic')?.checked;
+    if (realisticMode) {
+      camMode = 'record';
+      // form 의 cam_mode 를 덮어쓰기 (이미 위에서 append 됐을 수 있음)
+      form.set('cam_mode', 'record');
+    }
+    // 서버에 interview_mode 전달 — realistic 면 중도 이탈 시 자동 폐기 정책 활성
+    form.append('interview_mode', realisticMode ? 'realistic' : 'practice');
+
+    // 관리자 디버그 옵션 — admin role 일 때만 의미 있음. 비-admin 이 위변조해도 서버가 무시.
+    if (currentUser?.role === 'admin') {
+      form.append('debug_topic_bias',      $('debugTopicBias')?.value      || 'balanced');
+      form.append('debug_difficulty_bias', $('debugDifficultyBias')?.value || 'balanced');
+      form.append('debug_style_bias',      $('debugStyleBias')?.value      || 'balanced');
+      form.append('debug_force_keywords',  $('debugForceKeywords')?.value  || '');
+      form.append('debug_score_leniency',  $('debugLeniency')?.value       || '1.0');
+      form.append('debug_role_specific',   $('debugRoleSpecific')?.checked ? 'true' : 'false');
+    }
+
+    qLockedForRerecord = new Set();   // 새 면접 — 잠금 초기화
+
     // 회사·직무 정보 (선택). 비어있으면 보내지 않음.
     const _company = ($('companyName')?.value || '').trim();
     const _jobTtl  = ($('jobTitle')?.value || '').trim();
@@ -758,7 +980,13 @@ $('startBtn').addEventListener('click', async () => {
     const res = await fetch('/api/interview/start-stream', { method: 'POST', body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || '시작 실패');
+      // detail 이 배열/객체일 수도 있으니 안전 변환
+      let msg;
+      if (typeof err.detail === 'string') msg = err.detail;
+      else if (Array.isArray(err.detail))  msg = err.detail.map(e => e.msg || JSON.stringify(e)).join(' / ');
+      else if (err.detail)                 msg = JSON.stringify(err.detail);
+      else                                  msg = '시작 실패';
+      throw new Error(msg);
     }
 
     // 스트리밍 응답 읽기
@@ -790,8 +1018,13 @@ $('startBtn').addEventListener('click', async () => {
           qIdx = 0;
           updateProgress(payload.progress ?? 85, payload.message || '');
 
-          // 재개 지점 저장 — 이후 새로고침/튕김 시 이어서 진행 가능
+          // 재개 지점 저장 — 이후 새로고침/튕김 시 이어서 진행 가능 (실전 모드는 saveResumePoint 안에서 skip)
           saveResumePoint(sessionId);
+          // 실전 모드: 페이지 이탈 즉시 서버측 세션 폐기 (DB 저장 X).
+          // sendBeacon 은 페이지가 사라지는 도중에도 안정적으로 전송됨.
+          if (realisticMode) {
+            armRealisticDiscardOnUnload(sessionId);
+          }
 
           if (!switchedToInterview) {
             switchedToInterview = true;
@@ -878,9 +1111,49 @@ function showQuestion() {
   $('nextBtn').disabled = true;
   $('recordStatus').textContent = '버튼을 눌러 녹음 시작';
   $('recordTimer').textContent = `0.0초 / 최대 ${MAX_SECONDS}초`;
+
+  // ──── 실전 모드: 10초 카운트다운 후 자동 녹음 + 텍스트 모드 차단 + 재녹음 잠금 ────
+  if (realisticMode) {
+    // 텍스트 모드 토글 + 다음 버튼 잠금 (자동 흐름이라 사용자 조작 최소화)
+    $('toggleTextBtn')?.classList.add('hidden');
+    // 이전 카운트다운이 살아있으면 정리
+    if (realisticCountdown) { clearInterval(realisticCountdown); realisticCountdown = null; }
+
+    // 같은 질문 재녹음 잠금 — 이미 녹음한 인덱스면 곧장 다음 단계로 가야 하지만,
+    // showQuestion 은 보통 새 질문에서 호출되므로 일반적으로는 깨끗한 상태.
+    if (qLockedForRerecord.has(qIdx)) {
+      $('recordStatus').textContent = '실전 모드: 이 질문은 답변 완료됨';
+      $('recordBtn').disabled = true;
+      return;
+    }
+    $('recordBtn').disabled = true;   // 카운트다운 중엔 버튼 비활성화
+    let s = REALISTIC_QUESTION_SEC;
+    $('recordStatus').textContent = `실전 모드 · ${s}초 후 녹음 자동 시작...`;
+    realisticCountdown = setInterval(() => {
+      s -= 1;
+      if (s > 0) {
+        $('recordStatus').textContent = `실전 모드 · ${s}초 후 녹음 자동 시작...`;
+      } else {
+        clearInterval(realisticCountdown);
+        realisticCountdown = null;
+        $('recordBtn').disabled = false;
+        startRecording().catch(e => {
+          showError('interviewError', '자동 녹음 시작 실패: ' + (e?.message || e));
+        });
+      }
+    }, 1000);
+  } else {
+    // 일반 모드 — 텍스트 토글 다시 노출
+    $('toggleTextBtn')?.classList.remove('hidden');
+    $('recordBtn').disabled = false;
+  }
 }
 
 $('recordBtn').addEventListener('click', async () => {
+  // 실전 모드: 이미 답변 끝낸 질문이면 재녹음 차단
+  if (realisticMode && !isRecording && qLockedForRerecord.has(qIdx)) {
+    return;
+  }
   if (!isRecording) await startRecording();
   else                stopRecording();
 });
@@ -931,6 +1204,12 @@ function stopRecording() {
   $('recordIcon').outerHTML = '<svg id="recordIcon" class="w-9 h-9 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
   $('recordBtn').classList.remove('pulse-record');
   $('recordStatus').textContent = '업로드 + 변환 중...';
+
+  // 실전 모드: 이 질문은 답변 완료 — 재녹음 차단
+  if (realisticMode) {
+    qLockedForRerecord.add(qIdx);
+    $('recordBtn').disabled = true;
+  }
 }
 
 // ===================== 영상 녹화 (카메라 모드 != off) =====================
@@ -1081,6 +1360,8 @@ $('nextBtn').addEventListener('click', async () => {
     } catch (e) { /* ignore */ }
     // 면접이 끝나 결과 단계로 넘어가므로 재개 지점은 더 이상 필요 없음
     clearResumePoint();
+    // 실전 모드 — 정상 finalize 진입 = 폐기 방지 (이 이후 페이지 이동은 결과 화면으로 가는 것)
+    disarmRealisticDiscard();
     // cam_mode 는 finalizing 페이지가 단계 라벨을 다르게 표시하기 위해 사용
     location.href = `/finalizing/${encodeURIComponent(sessionId)}?cam=${encodeURIComponent(camMode || 'realtime')}`;
   }
@@ -1312,8 +1593,10 @@ function renderNonverbalFeedback(result) {
 
 // ===================== 카메라 / 얼굴 분석 / 텍스트 모드 =====================
 async function setupCameraIfNeeded() {
+  console.log(`[Camera] setupCameraIfNeeded — camMode=${camMode}`);
   if (camMode === 'off') {
     $('cameraBox').classList.add('hidden');
+    console.log('[Camera] camMode=off → skip');
     return;
   }
 
@@ -1327,20 +1610,29 @@ async function setupCameraIfNeeded() {
       },
       audio: true,
     });
+    const tracks = camStream.getTracks().map(t => `${t.kind}:${t.enabled}/${t.readyState}`).join(', ');
+    console.log(`[Camera] getUserMedia OK — tracks=[${tracks}]`);
   } catch (e) {
     showError('interviewError', '카메라 권한이 필요합니다: ' + e.message);
     camMode = 'off';
+    console.error('[Camera] getUserMedia 실패:', e);
     return;
   }
 
   const video = $('camVideo');
   video.srcObject = camStream;
 
+  // cameraBox 는 항상 정상 위치·사이즈로 visible — face_analyzer 가 frame 처리 보장.
+  // 'record-only' / 실전 모드일 때는 video 위에 검은 cameraHider overlay 를 덮어
+  // 사용자 시야에서만 영상을 가린다. (video element 자체는 살아있어 분석 정상)
+  $('cameraBox').classList.remove('hidden');
+  $('cameraBox').style.cssText = '';
+  const hider = $('cameraHider');
   if (camMode === 'realtime') {
-    $('cameraBox').classList.remove('hidden');
+    hider?.classList.add('hidden');     // 영상 보임
   } else {
-    // record-only — 화면엔 안 보이지만 분석은 진행
-    $('cameraBox').classList.add('hidden');
+    hider?.classList.remove('hidden');  // 영상 가림
+    console.log('[Camera] record-only → cameraHider overlay 노출 (video 는 정상 흐름)');
   }
 
   // 캔버스 사이즈 동기화
@@ -1348,17 +1640,26 @@ async function setupCameraIfNeeded() {
   video.addEventListener('loadedmetadata', () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
+    console.log(`[Camera] loadedmetadata — video=${video.videoWidth}×${video.videoHeight}`);
   }, { once: true });
+
+  // autoplay 정책으로 자동 재생 실패할 수 있어 명시적 play() — Promise rejection silent 처리
+  try {
+    const p = video.play();
+    if (p && typeof p.then === 'function') {
+      p.catch(err => console.warn('[Camera] video.play() 실패:', err?.message || err));
+    }
+  } catch (_) { /* 무시 */ }
 
   // 얼굴 분석 시작 — 사용자에게는 카메라 영상만 보이고, 분석은 백그라운드에서만 진행
   try {
     faceAnalyzer = new FaceAnalyzer();
     // canvas 는 분석기에 전달하되, _draw() 는 비어있어 시각화 X
     await faceAnalyzer.start(video, canvas, null);
+    console.log('[Camera] faceAnalyzer.start() 성공 — _tick 루프 시작됨');
   } catch (e) {
     const detail = (e && (e.message || e.type || e.toString())) || JSON.stringify(e);
     console.error('얼굴 분석 시작 실패:', detail, e);
-    // 사용자에게는 별도 알림 없이 카메라만 그대로 보임
   }
 }
 
@@ -1390,6 +1691,8 @@ async function collectAndSubmitNonverbal() {
 
 // ===================== 텍스트 입력 모드 =====================
 $('toggleTextBtn')?.addEventListener('click', () => {
+  // 실전 모드에서는 텍스트 입력 차단
+  if (realisticMode) return;
   useTextMode = true;
   if (isRecording) stopRecording();
   $('recordPane').classList.add('hidden');

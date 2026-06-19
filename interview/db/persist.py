@@ -37,6 +37,7 @@ def persist_finalized_session(
     voice_eval: Optional[dict] = None,                 # 음성 비언어 세션 집계 (옵션)
     voice_per_question: Optional[list] = None,         # 답변별 음성 비언어 평가 (옵션)
     consistency_checks: Optional[list] = None,         # 답변별 일관성 검증 결과 (옵션)
+    company_research: Optional[dict] = None,           # 회사·직무 리서치 결과 (옵션)
     video_paths: Optional[list] = None,   # [None | "supabase:..."] 질문 인덱스별
     model_used: Optional[str] = None,     # 답변 평가에 사용한 OpenAI 모델 이름
 ) -> InterviewSession:
@@ -166,8 +167,15 @@ def persist_finalized_session(
     has_visual = bool(nonverbal_metrics and nonverbal_metrics.get("ok"))
     has_voice = bool(voice_eval and voice_eval.get("ok"))
     has_consistency = bool(consistency_checks)
+    # 회사 입력만 있어도 row 생성 (사용자가 회사 검색 결과를 결과 페이지에서 확인 가능하도록)
+    has_company = bool(
+        company_research
+        and (company_research.get("company_name")
+             or company_research.get("job_title")
+             or company_research.get("company_job_summary"))
+    )
 
-    if has_visual or has_voice or has_consistency:
+    if has_visual or has_voice or has_consistency or has_company:
         nm_dict = nonverbal_metrics if has_visual else {}
         m = (nm_dict.get("metrics") or {}) if has_visual else {}
         s = (nm_dict.get("scores_20") or {}) if has_visual else {}
@@ -181,6 +189,8 @@ def persist_finalized_session(
             bundle["voice_per_question"] = voice_per_question
         if consistency_checks:
             bundle["consistency_checks"] = consistency_checks
+        if company_research:
+            bundle["company_research"] = company_research
 
         # 옛 4축 호환: focus_score/blink_score 컬럼은 분해 컴포넌트가 있으면 거기서,
         # 없으면 통합 gaze 에서 절반씩 추정 (대시보드 합산만 정확하면 됨)

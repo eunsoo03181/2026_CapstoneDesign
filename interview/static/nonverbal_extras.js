@@ -129,3 +129,135 @@ export function renderConsistencyCard(cardEl, consistencyChecks = [], qaPairs = 
     </p>
     ${items}`;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// 회사·직무 리서치 카드
+// 사용자가 "회사 검색이 실제로 동작했는지" 확인할 수 있도록 LLM 이 만든
+// company_job_summary 의 핵심 필드를 그대로 노출.
+// ─────────────────────────────────────────────────────────────────────
+export function renderCompanyResearchCard(cardEl, companyResearch) {
+  if (!cardEl) return;
+  const cr = companyResearch || {};
+  const mode = cr.research_mode || "none";
+  const summary = (cr.company_job_summary || {}).company_job_summary
+                  || cr.company_job_summary
+                  || {};
+  // research_mode === 'none' 이고 summary 도 없으면 카드 숨김 (사용자가 회사 입력 안 함)
+  if (mode === "none" && !cr.company_name && !cr.job_title && (!summary || !Object.keys(summary).length)) {
+    cardEl.classList.add("hidden");
+    cardEl.innerHTML = "";
+    return;
+  }
+  cardEl.classList.remove("hidden");
+
+  const modeBadge = (() => {
+    if (mode === "auto") {
+      return `<span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                🔍 LLM 자동 리서치
+              </span>`;
+    }
+    if (mode === "pasted") {
+      return `<span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold border bg-indigo-50 text-indigo-700 border-indigo-200">
+                📋 사용자 입력 텍스트 요약
+              </span>`;
+    }
+    return `<span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold border bg-slate-50 text-slate-600 border-slate-200">
+              회사 정보 없음
+            </span>`;
+  })();
+
+  const company = escapeHtml(cr.company_name || "(미입력)");
+  const job = escapeHtml(cr.job_title || "(미입력)");
+
+  // summary 내부 필드들 — 있는 것만 표시
+  const valToText = (v) => {
+    if (v == null) return "";
+    if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean).join(" · ");
+    return String(v).trim();
+  };
+  const field = (label, key) => {
+    const text = valToText(summary[key]);
+    if (!text || text === "확인 불가") return "";
+    return `
+      <div class="border-l-2 border-slate-200 pl-3 py-1">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-0.5">${label}</p>
+        <p class="text-sm text-slate-800 leading-relaxed">${escapeHtml(text)}</p>
+      </div>`;
+  };
+
+  // 시드/압박 포인트 (있으면)
+  const seedsHtml = (() => {
+    const seeds = summary.question_seed_points || [];
+    if (!seeds.length) return "";
+    const items = seeds.slice(0, 6).map(s => {
+      const topic = typeof s === "object" ? (s.topic || "") : String(s);
+      return topic.trim() ? `<li class="text-xs text-slate-700">${escapeHtml(topic)}</li>` : "";
+    }).filter(Boolean).join("");
+    return items ? `
+      <div class="border-l-2 border-indigo-200 pl-3 py-1">
+        <p class="text-[11px] font-semibold text-indigo-600 uppercase tracking-wide mb-1">면접 시드 포인트</p>
+        <ul class="list-disc list-inside space-y-0.5">${items}</ul>
+      </div>` : "";
+  })();
+
+  const pressuresHtml = (() => {
+    const ps = summary.pressure_points || [];
+    if (!ps.length) return "";
+    const items = ps.slice(0, 5).map(p => {
+      const text = typeof p === "object" ? (p.point || p.topic || "") : String(p);
+      return text.trim() ? `<li class="text-xs text-slate-700">${escapeHtml(text)}</li>` : "";
+    }).filter(Boolean).join("");
+    return items ? `
+      <div class="border-l-2 border-rose-200 pl-3 py-1">
+        <p class="text-[11px] font-semibold text-rose-600 uppercase tracking-wide mb-1">검증 포인트</p>
+        <ul class="list-disc list-inside space-y-0.5">${items}</ul>
+      </div>` : "";
+  })();
+
+  // summary 가 비어있는 경우 안내
+  const hasAnyContent = Object.keys(summary || {}).some(k => valToText(summary[k]));
+  const emptyNotice = !hasAnyContent ? `
+    <p class="text-xs text-slate-500 mt-2">
+      회사 리서치가 비어 있습니다. 회사명·직무명만으로는 LLM 이 정보를 찾지 못했거나,
+      해당 면접 시점엔 리서치 기능이 비활성화돼 있었을 수 있어요.
+    </p>` : "";
+
+  cardEl.innerHTML = `
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <h3 class="font-bold">회사·직무 리서치</h3>
+      ${modeBadge}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+      <div class="rounded-lg bg-slate-50 p-3">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-0.5">회사</p>
+        <p class="text-sm font-semibold text-slate-900">${company}</p>
+      </div>
+      <div class="rounded-lg bg-slate-50 p-3">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-0.5">직무</p>
+        <p class="text-sm font-semibold text-slate-900">${job}</p>
+      </div>
+    </div>
+    <div class="space-y-2">
+      ${field("회사 개요",          "company_overview")}
+      ${field("주요 사업",          "main_business")}
+      ${field("최근 전략",          "recent_strategy")}
+      ${field("직무 역할",          "job_role")}
+      ${field("직무 ↔ 사업 연관성", "business_relevance_to_job")}
+      ${field("필요 역량",          "required_competencies")}
+      ${field("필요 지식",          "required_knowledge")}
+      ${field("관련 기술",          "required_technologies")}
+      ${field("업무 환경",          "work_context")}
+      ${field("핵심가치 / 인재상",   "core_values")}
+      ${field("면접 키워드",         "interview_keywords")}
+      ${seedsHtml}
+      ${pressuresHtml}
+    </div>
+    ${emptyNotice}
+    <p class="text-[11px] text-slate-400 mt-3">
+      ${mode === "auto"
+        ? "회사명만 입력된 경우 LLM 이 자동으로 공개 정보를 정리한 결과입니다 — 실제 회사 공식 자료와 다를 수 있어요."
+        : mode === "pasted"
+          ? "사용자가 붙여넣은 JD/회사 설명 텍스트를 LLM 이 정리한 결과입니다."
+          : ""}
+    </p>`;
+}
